@@ -9,13 +9,12 @@ fn main() {
             s.spawn(|| {
                 let tid = thread::current().id();
                 println!("{tid:2?} - Enter");
-                thread::sleep(Duration::from_millis(1000));
-                println!("{tid:2?} - Locking");
                 let mut guard = n.lock().unwrap();
-                println!("{tid:2?} - Processing");
                 for _ in 0..100 {
                     *guard += 1;
                 }
+                //drop(guard); // would speed up the program x10
+                thread::sleep(Duration::from_millis(1000));
                 println!("{tid:2?} - Done");
             });
         }
