@@ -10,12 +10,25 @@ fn main() {
                 let tid = thread::current().id();
                 println!("{tid:2?} - Enter");
 
-                // Lock is poisoned if the thread that hold it panicked
-                let mut guard = n.lock().expect("Lock was poisoned");
-                for _ in 0..100 {
-                    *guard += 1;
+                // Scoping guard to release the lock as soon as possible
+                {
+                    let mut guard = n.lock().map_err(|e| {
+                        // Lock is poisoned if the thread that hold it panicked
+                        eprintln!("{tid:2?} - Lock was poisoned");
+                        e.into_inner()
+                    }).expect("Should be mapped to guard in either case");
+
+                    for _ in 0..100 {
+                        *guard += 1;
+                    }
+
+                    if *guard > 500 {
+                        // This will panic and poison the lock
+                        // For now thread::scope would re-panic,
+                        // don't know how to change that
+                        panic!("{tid:?} - Test panic");
+                    }
                 }
-                //drop(guard); // would speed up the program x10, or add {} around guard
 
                 thread::sleep(Duration::from_millis(1000));
                 println!("{tid:2?} - Done");
