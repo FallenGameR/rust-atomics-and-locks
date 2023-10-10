@@ -13,7 +13,7 @@ fn main() {
                 for _ in 0..100 {
                     *guard += 1;
                 }
-                //drop(guard); // would speed up the program x10
+                //drop(guard); // would speed up the program x10, or add {} around guard
                 thread::sleep(Duration::from_millis(1000));
                 println!("{tid:2?} - Done");
             });
