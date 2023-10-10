@@ -9,11 +9,14 @@ fn main() {
             s.spawn(|| {
                 let tid = thread::current().id();
                 println!("{tid:2?} - Enter");
-                let mut guard = n.lock().unwrap();
+
+                // Lock is poisoned if the thread that hold it panicked
+                let mut guard = n.lock().expect("Lock was poisoned");
                 for _ in 0..100 {
                     *guard += 1;
                 }
                 //drop(guard); // would speed up the program x10, or add {} around guard
+
                 thread::sleep(Duration::from_millis(1000));
                 println!("{tid:2?} - Done");
             });
