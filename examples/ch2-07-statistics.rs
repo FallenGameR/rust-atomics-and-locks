@@ -9,6 +9,7 @@ fn main() {
     let num_done = &AtomicUsize::new(0);
     let total_time = &AtomicU64::new(0);
     let max_time = &AtomicU64::new(0);
+    let min_time = &AtomicU64::new(u64::MAX);
 
     thread::scope(|s| {
         // Four background threads to process all 100 items, 25 each.
@@ -21,6 +22,7 @@ fn main() {
                     num_done.fetch_add(1, Relaxed);
                     total_time.fetch_add(time_taken, Relaxed);
                     max_time.fetch_max(time_taken, Relaxed);
+                    min_time.fetch_min(time_taken, Relaxed);
                 }
             });
         }
@@ -29,13 +31,15 @@ fn main() {
         loop {
             let total_time = Duration::from_micros(total_time.load(Relaxed));
             let max_time = Duration::from_micros(max_time.load(Relaxed));
+            let min_time = Duration::from_micros(min_time.load(Relaxed));
             let n = num_done.load(Relaxed);
             if n == 100 { break; }
             if n == 0 {
                 println!("Working.. nothing done yet.");
             } else {
                 println!(
-                    "Working.. {n}/100 done, {:.1?} average, {:.1?} peak",
+                    "Working.. {n}/100 done, {:.1?} min, {:.1?} current avg, {:.1?} max",
+                    min_time,
                     total_time / n as u32,
                     max_time,
                 );
