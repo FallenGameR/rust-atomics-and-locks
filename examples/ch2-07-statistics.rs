@@ -22,6 +22,7 @@ fn main() {
                     num_done.fetch_add(1, Relaxed);
 
                     // Ordering would not be strict - update order can be any
+                    // Mutex would make that operation atomic but it would start blocking threads
                     total_time.fetch_add(time_taken, Relaxed);
                     max_time.fetch_max(time_taken, Relaxed);
                     min_time.fetch_min(time_taken, Relaxed);
