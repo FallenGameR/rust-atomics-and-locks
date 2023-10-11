@@ -15,7 +15,7 @@ fn main() {
 
     // Use the main thread to listen for user input.
     for line in std::io::stdin().lines() {
-        match line.unwrap().as_str() {
+        match line.expect("Can read string from STDIN").as_str() {
             "help" => println!("commands: help, stop"),
             "stop" => break,
             cmd => println!("unknown command: {cmd:?}"),
@@ -24,11 +24,13 @@ fn main() {
 
     // Inform the background thread it needs to stop.
     STOP.store(true, Relaxed);
+    println!("stop signal sent, awaiting background thread for up to 1 second");
 
     // Wait until the background thread finishes.
     background_thread.join().unwrap();
+    println!("background thread joined");
 }
 
 fn some_work() {
-    thread::sleep(Duration::from_millis(100));
+    thread::sleep(Duration::from_secs(1));
 }
