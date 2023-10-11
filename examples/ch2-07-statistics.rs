@@ -35,7 +35,7 @@ fn main() {
                 println!("Working.. nothing done yet.");
             } else {
                 println!(
-                    "Working.. {n}/100 done, {:?} average, {:?} peak",
+                    "Working.. {n}/100 done, {:.1?} average, {:.1?} peak",
                     total_time / n as u32,
                     max_time,
                 );
