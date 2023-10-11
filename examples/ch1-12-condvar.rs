@@ -11,15 +11,15 @@ fn main() {
     thread::scope(|s| {
         s.spawn(|| {
             loop {
-                let mut q = queue.lock().unwrap();
+                let mut guard = queue.lock().expect("Mutex is not poisoned");
                 let item = loop {
-                    if let Some(item) = q.pop_front() {
+                    if let Some(item) = guard.pop_front() {
                         break item;
                     } else {
-                        q = not_empty.wait(q).unwrap();
+                        guard = not_empty.wait(guard).expect("Mutex is not poisoned");
                     }
                 };
-                drop(q);
+                drop(guard);
                 dbg!(item);
             }
         });
