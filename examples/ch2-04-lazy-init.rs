@@ -3,6 +3,8 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::thread;
 use std::time::Duration;
 
+// If there is a race the X will get calculated multiple times.
+// In Rust you can use Once and OnceLock to calculate the value only once.
 fn get_x() -> u64 {
     static X: AtomicU64 = AtomicU64::new(0);
     let mut x = X.load(Relaxed);
