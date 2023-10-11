@@ -7,7 +7,7 @@ fn main() {
     let queue = Mutex::new(VecDeque::new());
 
     thread::scope(|s| {
-        // Consuming thread
+        // Consuming thread - park
         let t = s.spawn(|| loop {
             let item = queue.lock().unwrap().pop_front();
             if let Some(item) = item {
@@ -17,7 +17,7 @@ fn main() {
             }
         });
 
-        // Producing thread
+        // Producing thread - unpark
         for i in 0.. {
             queue.lock().unwrap().push_back(i);
             t.thread().unpark();
