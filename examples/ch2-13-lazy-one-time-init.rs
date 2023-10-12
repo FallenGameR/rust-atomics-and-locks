@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering::Relaxed;
 
-// if generating key takes a long time it would be better to use OnceLock
+// if generating key takes a long time it would be better to use Once or OnceLock
 // this way we wouldn't spend CPU time on generating the key multiple times
 fn get_key() -> u64 {
     static KEY: AtomicU64 = AtomicU64::new(0);
