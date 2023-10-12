@@ -1,6 +1,7 @@
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::Relaxed;
 
+// All other atomic operations can be implemented via compare_exchange.
 fn increment(a: &AtomicU32) {
     let mut current = a.load(Relaxed);
     loop {

@@ -5,7 +5,9 @@ fn allocate_new_id() -> u32 {
     static NEXT_ID: AtomicU32 = AtomicU32::new(0);
     let mut id = NEXT_ID.load(Relaxed);
     loop {
+        // Theshold can be set to U32::MAX and we still would not get an overflow.
         assert!(id < 1000, "too many IDs!");
+        // _week version is faster but it may return Err even if the expected value matched.
         match NEXT_ID.compare_exchange_weak(id, id + 1, Relaxed, Relaxed) {
             Ok(_) => return id,
             Err(v) => id = v,
