@@ -18,9 +18,10 @@ fn main() {
                     } else {
                         // Coordinates wait between the guarded value (vector) and some condition (not empty)
                         //
-                        // This is an atomic operation that unlocks the mutex (otherwise we are holding it opened
-                        // in a loop and blocking other threads to update the vector) and waits for the condition
-                        // to be true (that needs to happen for our thread to actually continue and do something useful).
+                        // This is an atomic operation that unlocks the mutex (otherwise we are holding it
+                        // opened in a loop and blocking other threads to update the vector) and waits for the
+                        // condition to be true (that needs to happen for our thread to actually continue and
+                        // do something useful).
                         guard = not_empty.wait(guard).expect("Mutex is not poisoned");
                     }
                 };
