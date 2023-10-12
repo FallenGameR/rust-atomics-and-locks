@@ -13,6 +13,9 @@ fn allocate_new_id() -> u32 {
             Err(v) => id = v,
         }
     }
+
+    // There is a convinience method that would allow to do the same in one line:
+    // NEXT_ID.fetch_update(Relaxed, Relaxed, |n| n.checked_add(1)).expect("We should not reach the MAX value")
 }
 
 fn main() {
