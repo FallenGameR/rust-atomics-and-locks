@@ -25,3 +25,22 @@ fn main() {
         }
     });
 }
+
+/*
+P
+            queue.lock().unwrap().push_back(i);
+C
+            let item = queue.lock().unwrap().pop_front();
+            if let Some(item) = item
+                dbg!(item);
+            let item = queue.lock().unwrap().pop_front();
+            } else {
+                thread::park();
+P
+            t.thread().unpark();
+            // one more cycle here that can't retrieve any elements
+            // this problem is solved via Condvar
+
+Plus with parking the Producer must know exactly what consumer threads need to be notified and
+what condition are they waiting for. So that is a lot of coupling that gets complicated very fast.
+*/
