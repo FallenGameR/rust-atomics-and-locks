@@ -45,3 +45,6 @@ fn main() {
 //
 // On the other hand the thread parking while easier to understand leaves posibility of some code paths
 // that are not intuitive and can lead to bugs. So it is a false sense of understanding.
+//
+// It can be summarized this way: if you understand that thread parking would solve your problem here
+// think how to do the same with condvar and use this template as a starting point.
