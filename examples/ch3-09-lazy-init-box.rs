@@ -4,13 +4,22 @@ use std::sync::atomic::Ordering::{Acquire, Release};
 fn get_data() -> &'static Data {
     static PTR: AtomicPtr<Data> = AtomicPtr::new(std::ptr::null_mut());
 
+    // load  -read  -acquire
+    // store -write -release
+    //
+    // success: read-modify-write, load-modify-store, acquire-modify-release
+    // fail:    read,              load,              acquire
+    //
+    // Release = AcqRel
+    //
+    // Relaxed can not be used here for the fail case since we do process
+    // the fail case and need to make sure we already initialized data to be dropped
+
     let mut p = PTR.load(Acquire);
 
     if p.is_null() {
         p = Box::into_raw(Box::new(generate_data()));
-        if let Err(e) = PTR.compare_exchange(
-            std::ptr::null_mut(), p, Release, Acquire
-        ) {
+        if let Err(e) = PTR.compare_exchange(std::ptr::null_mut(), p, Release, Acquire) {
             // Safety: p comes from Box::into_raw right above,
             // and wasn't shared with any other thread.
             drop(unsafe { Box::from_raw(p) });

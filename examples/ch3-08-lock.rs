@@ -6,6 +6,17 @@ static mut DATA: String = String::new();
 static LOCKED: AtomicBool = AtomicBool::new(false);
 
 fn f() {
+    // load  -read  -acquire
+    // store -write -release
+    //
+    // success: read-modify-write, load-modify-store, acquire-modify-release
+    // fail:    read,              load,              acquire
+    //
+    // Acquire = AcqRel
+    //
+    // Relaxed can be used here for the fail case since we don't process
+    // the fail case and thus we don't care about ordering for it
+
     // This also can be written as LOCKED.swap(true, Acquire) == false
     if LOCKED.compare_exchange(false, true, Acquire, Relaxed).is_ok() {
         // Safety: We hold the exclusive lock, so nothing else is accessing DATA.
