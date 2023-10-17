@@ -6,6 +6,7 @@ static mut DATA: String = String::new();
 static LOCKED: AtomicBool = AtomicBool::new(false);
 
 fn f() {
+    // This also can be written as LOCKED.swap(true, Acquire) == false
     if LOCKED.compare_exchange(false, true, Acquire, Relaxed).is_ok() {
         // Safety: We hold the exclusive lock, so nothing else is accessing DATA.
         unsafe { DATA.push('!') };
@@ -22,4 +23,5 @@ fn main() {
     // DATA now contains at least one exclamation mark (and maybe more).
     assert!(unsafe { DATA.len() } > 0);
     assert!(unsafe { DATA.chars().all(|c| c == '!') });
+    println!("{}", unsafe{ DATA.len() });
 }
