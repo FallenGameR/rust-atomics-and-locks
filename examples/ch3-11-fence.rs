@@ -20,6 +20,9 @@ fn main() {
     thread::sleep(Duration::from_millis(500));
     let ready: [bool; 10] = std::array::from_fn(|i| READY[i].load(Relaxed));
     if ready.contains(&true) {
+        // Fence is acquired before reading the data
+        // One Acquire(read) works to order all the atomic Release(write) operations
+        // But the &true from if was ready before the fence, we need at least one
         fence(Acquire);
         for i in 0..10 {
             if ready[i] {

@@ -24,4 +24,5 @@ fn main() {
 
     a.join().unwrap();
     b.join().unwrap();
+    unsafe{ dbg!( &S ); }
 }
