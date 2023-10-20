@@ -16,11 +16,15 @@ impl<T> Channel<T> {
     }
 
     pub fn send(&self, message: T) {
+        // Problem: capacity growth is slow and receiver is blocked while we do that.
+        // Problem: if receiver is not fast enough to process messages, the queue will grow indefinitely.
         self.queue.lock().unwrap().push_back(message);
         self.item_ready.notify_one();
     }
 
     pub fn receive(&self) -> T {
+        // Problem: we are blocking queue for every item, fast bulk proessing is not possible.
+        // Problem: there could be only one reveiver.
         let mut b = self.queue.lock().unwrap();
         loop {
             if let Some(message) = b.pop_front() {
