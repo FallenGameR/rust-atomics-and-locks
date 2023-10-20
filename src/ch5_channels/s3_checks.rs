@@ -6,9 +6,11 @@ use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 pub struct Channel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
     // Indicates if send has already started
+    // better name: sent_started
     in_use: AtomicBool,
     // Indicates if send has already finished
     // Plus is used to limit receive to only a single call
+    // better name: sent_finished, plus have a separate non-reentrancy flag for receive
     ready: AtomicBool,
 }
 
