@@ -20,7 +20,7 @@ impl<T> Channel<T> {
         }
     }
 
-    /// Panics when trying to send more than one message.
+    // Panics when trying to send more than one message.
     pub fn send(&self, message: T) {
         if self.in_use.swap(true, Relaxed) {
             panic!("can't send more than one message!");
@@ -29,14 +29,14 @@ impl<T> Channel<T> {
         self.ready.store(true, Release);
     }
 
+    // NOTE: The ordering here used to be Acquire.
     pub fn is_ready(&self) -> bool {
         self.ready.load(Relaxed)
     }
 
-    /// Panics if no message is available yet,
-    /// or if the message was already consumed.
-    ///
-    /// Tip: Use `is_ready` to check first.
+    // Panics if no message is available yet.
+    // Tip: Use `is_ready` to check first.
+    // Safety: Only call this once, otherwise you would copy potentially uncopyable data
     pub fn receive(&self) -> T {
         if !self.ready.swap(false, Acquire) {
             panic!("no message available!");

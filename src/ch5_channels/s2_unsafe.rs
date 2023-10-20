@@ -51,7 +51,7 @@ impl<T> Channel<T> {
         self.ready.load(Acquire)
     }
 
-    // Safety: Only call this once, nd only after is_ready() returns true!
+    // Safety: Only call this once, and only after is_ready() returns true!
     // Problem: The user may call it twice and that result in 2 copies of data that
     //          doesn't implement Copy (that marks that data can be safely copied).
     pub unsafe fn receive(&self) -> T {
