@@ -6,12 +6,12 @@ use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 pub struct Channel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
     // Indicates if send has already started
-    // better name: sent_started
-    in_use: AtomicBool,
+    // better name: in_use -> sent_started
+    send_started: AtomicBool,
     // Indicates if send has already finished
     // Plus is used to limit receive to only a single call
-    // better name: sent_finished, plus have a separate non-reentrancy flag for receive
-    ready: AtomicBool,
+    // better name: ready -> sent_finished, plus have a separate non-reentrancy flag for receive
+    send_finished: AtomicBool,
 }
 
 unsafe impl<T> Sync for Channel<T> where T: Send {}
@@ -20,8 +20,8 @@ impl<T> Channel<T> {
     pub const fn new() -> Self {
         Self {
             message: UnsafeCell::new(MaybeUninit::uninit()),
-            in_use: AtomicBool::new(false),
-            ready: AtomicBool::new(false),
+            send_started: AtomicBool::new(false),
+            send_finished: AtomicBool::new(false),
         }
     }
 
@@ -34,7 +34,7 @@ impl<T> Channel<T> {
         // If `!self.ready.load(Acquire)` would be used here
         // we would panic only if the message is not available yet
         // but still permit mutiple receive calls.
-        if !self.ready.swap(false, Acquire) {
+        if !self.send_finished.swap(false, Acquire) {
             panic!("no message available!");
         }
         // Safety: We've just checked (and reset) the ready flag.
@@ -49,17 +49,21 @@ impl<T> Channel<T> {
     //
     // There is no way to see `is_ready` returning true and `receive` still panicking regardless of the
     // memory ordering in `is_ready`.
+    //
+    // We expect that a user would keep checking for `is_ready` in a loop.
+    // In the case of `Acquire` we are effectivelly flush the caches to make sure
+    // there are no extra loop cycles but with a potential hit to performance.
     pub fn is_ready(&self) -> bool {
-        self.ready.load(Relaxed)
+        self.send_finished.load(Relaxed)
     }
 
     // Panics when trying to send more than one message.
     pub fn send(&self, message: T) {
-        if self.in_use.swap(true, Relaxed) {
+        if self.send_started.swap(true, Relaxed) {
             panic!("can't send more than one message!");
         }
         unsafe { (*self.message.get()).write(message) };
-        self.ready.store(true, Release);
+        self.send_finished.store(true, Release);
     }
 
 }
@@ -67,7 +71,7 @@ impl<T> Channel<T> {
 // Rust guarantees that value would not be used after drop
 impl<T> Drop for Channel<T> {
     fn drop(&mut self) {
-        if *self.ready.get_mut() {
+        if *self.send_finished.get_mut() {
             unsafe { self.message.get_mut().assume_init_drop() }
         }
     }
