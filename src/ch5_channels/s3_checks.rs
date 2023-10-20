@@ -20,6 +20,31 @@ impl<T> Channel<T> {
         }
     }
 
+    // Panics if no message is available yet.
+    // Can be called only once, the second call will panic.
+    // Thus it would panic if the message was already consumed.
+    //
+    // Tip: Use `is_ready` to check first.
+    pub fn receive(&self) -> T {
+        if !self.ready.swap(false, Acquire) {
+            panic!("no message available!");
+        }
+        // Safety: We've just checked (and reset) the ready flag.
+        unsafe { (*self.message.get()).assume_init_read() }
+    }
+
+    // NOTE: The ordering here used to be Acquire.
+    // Relaxed insures total modification order.
+    //
+    // Thus if `is_ready/Relaxed` senced modification of `in_use` from `false` (in ctor) to `true` (in send)
+    // then the `receive/Acquire` would not see a different modification order and be consistent with it.
+    //
+    // There is no way to see `is_ready` returning true and `receive` still panicking regardless of the
+    // memory ordering in `is_ready`.
+    pub fn is_ready(&self) -> bool {
+        self.ready.load(Relaxed)
+    }
+
     // Panics when trying to send more than one message.
     pub fn send(&self, message: T) {
         if self.in_use.swap(true, Relaxed) {
@@ -29,27 +54,6 @@ impl<T> Channel<T> {
         self.ready.store(true, Release);
     }
 
-    // NOTE: The ordering here used to be Acquire.
-    // Relaxed insures total modification order.
-    //
-    // Thus if `is_ready/Relaxed` senced modification of `in_use` from `false` (in ctor) to `true` (in send)
-    // then the `receive/Acquire` would not see a different modification order and be consistent with it.
-    //
-    // There is no way to see `in_ready` returning true and `receive` still panicking.
-    pub fn is_ready(&self) -> bool {
-        self.ready.load(Relaxed)
-    }
-
-    // Panics if no message is available yet.
-    // Tip: Use `is_ready` to check first.
-    // Safety: Only call this once, otherwise you would copy potentially uncopyable data
-    pub fn receive(&self) -> T {
-        if !self.ready.swap(false, Acquire) {
-            panic!("no message available!");
-        }
-        // Safety: We've just checked (and reset) the ready flag.
-        unsafe { (*self.message.get()).assume_init_read() }
-    }
 }
 
 // Rust guarantees that value would not be used after drop
