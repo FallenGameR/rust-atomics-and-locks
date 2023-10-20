@@ -30,6 +30,12 @@ impl<T> Channel<T> {
     }
 
     // NOTE: The ordering here used to be Acquire.
+    // Relaxed insures total modification order.
+    //
+    // Thus if `is_ready/Relaxed` senced modification of `in_use` from `false` (in ctor) to `true` (in send)
+    // then the `receive/Acquire` would not see a different modification order and be consistent with it.
+    //
+    // There is no way to see `in_ready` returning true and `receive` still panicking.
     pub fn is_ready(&self) -> bool {
         self.ready.load(Relaxed)
     }
