@@ -16,6 +16,12 @@ pub struct Channel<T> {
 // Sync means that we can copy the reference of that data to another thread.
 unsafe impl<T> Sync for Channel<T> where T: Send {}
 
+// Problem: there is no Drop - it can't drop it's content when it goes out of scope,
+//          thus if a message was sent but never received it would never be dropped.
+//
+// Leaks: are ok in Rust if they are consequences of another leak - leaked vector
+//        leaks it's elements, this is not an undefined behavior; but normally
+//        Rust would not allow you to leak a vector to begin with.
 impl<T> Channel<T> {
     // `const` allows the compiler to pre-create such a structure during
     // compilation so that in runtime we can init is faster. But in order
@@ -33,18 +39,21 @@ impl<T> Channel<T> {
         }
     }
 
-    /// Safety: Only call this once!
+    // Safety: Only call this once!
+    // Problem: Two threads can call it at the same time and overwrite each other.
     pub unsafe fn send(&self, message: T) {
         (*self.message.get()).write(message);
         self.ready.store(true, Release);
     }
 
+    // Problem: The user must read docs and ensure that this method is called.
     pub fn is_ready(&self) -> bool {
         self.ready.load(Acquire)
     }
 
-    /// Safety: Only call this once,
-    /// and only after is_ready() returns true!
+    // Safety: Only call this once, nd only after is_ready() returns true!
+    // Problem: The user may call it twice and that result in 2 copies of data that
+    //          doesn't implement Copy (that marks that data can be safely copied).
     pub unsafe fn receive(&self) -> T {
         (*self.message.get()).assume_init_read()
     }
