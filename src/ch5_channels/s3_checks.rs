@@ -34,6 +34,10 @@ impl<T> Channel<T> {
         // If `!self.ready.load(Acquire)` would be used here
         // we would panic only if the message is not available yet
         // but still permit mutiple receive calls.
+        //
+        // `send_finished` here is also used to limit the number of receive calls to 1.
+        // It has an improper name for it. And such behaviour depends on another
+        // variable `send_started` which is not obvious.
         if !self.send_finished.swap(false, Acquire) {
             panic!("no message available!");
         }
