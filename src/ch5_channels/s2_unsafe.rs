@@ -17,6 +17,8 @@ pub struct Channel<T> {
 unsafe impl<T> Sync for Channel<T> where T: Send {}
 
 impl<T> Channel<T> {
+    // `const` allows the compiler to pre-create such a structure
+    // during compilation so that in runtime we can init is way faster
     pub const fn new() -> Self {
         Self {
             message: UnsafeCell::new(MaybeUninit::uninit()),
