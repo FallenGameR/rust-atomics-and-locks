@@ -9,8 +9,9 @@ pub struct Channel<T> {
     // better name: in_use -> sent_started
     send_started: AtomicBool,
     // Indicates if send has already finished
-    // Plus is used to limit receive to only a single call
-    // better name: ready -> sent_finished, plus have a separate non-reentrancy flag for receive
+    // Plus it is used to limit receive to only a single call
+    // Plus it is used in drop to make sure we have a message in the channel that was not received and thus needs to be dropped with the channel
+    // better name: ready -> sent_finished, plus have a separate non-reentrancy flag for receive and probably something else for drop
     send_finished: AtomicBool,
 }
 
