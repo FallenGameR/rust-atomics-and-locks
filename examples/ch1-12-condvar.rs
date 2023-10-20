@@ -10,9 +10,12 @@ fn main() {
 
     thread::scope(|s| {
         s.spawn(|| {
+            // This pattern of using condvar should be similar for all it's usages.
+            // There are only 2 places that would be different, I wonder if there is a macro for this.
             loop {
                 let mut guard = queue.lock().expect("Mutex is not poisoned");
                 let item = loop {
+                    // The way how to check for the value would be different (in the macro).
                     if let Some(item) = guard.pop_front() {
                         break item;
                     } else {
@@ -27,7 +30,8 @@ fn main() {
                 };
                 drop(guard);
 
-                // Some item processing that doesn't need to be protected by the mutex
+                // The way how to process a value outside of guard would be different (in the macro).
+                // Some item processing that doesn't need to be protected by the mutex.
                 dbg!(item);
             }
         });
