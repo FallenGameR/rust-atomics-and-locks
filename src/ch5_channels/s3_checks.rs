@@ -46,6 +46,7 @@ impl<T> Channel<T> {
     }
 }
 
+// Rust guarantees that value would not be used after drop
 impl<T> Drop for Channel<T> {
     fn drop(&mut self) {
         if *self.ready.get_mut() {
