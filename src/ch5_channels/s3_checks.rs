@@ -41,7 +41,9 @@ impl<T> Channel<T> {
         if !self.send_finished.swap(false, Acquire) {
             panic!("no message available!");
         }
+
         // Safety: We've just checked (and reset) the ready flag.
+        // Now it is on caller to drop this message.
         unsafe { (*self.message.get()).assume_init_read() }
     }
 
@@ -79,6 +81,14 @@ impl<T> Channel<T> {
 // Rust guarantees that value would not be used after drop
 impl<T> Drop for Channel<T> {
     fn drop(&mut self) {
+        // If there is a message in the channel and it was not received
+        // we need to clean it up.
+        //
+        // But what if we are dropping the channel in the middle of receive?
+        // Then the message would be leaked. Either this or we should block
+        // here until the receive would finish.
+        //
+        // Is it ok to block in the middle of drop?
         if *self.send_finished.get_mut() {
             unsafe { self.message.get_mut().assume_init_drop() }
         }
