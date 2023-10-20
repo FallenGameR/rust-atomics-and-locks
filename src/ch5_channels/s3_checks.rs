@@ -5,7 +5,10 @@ use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 pub struct Channel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
+    // Indicates if send has already started
     in_use: AtomicBool,
+    // Indicates if send has already finished
+    // Plus is used to limit receive to only a single call
     ready: AtomicBool,
 }
 
@@ -26,6 +29,9 @@ impl<T> Channel<T> {
     //
     // Tip: Use `is_ready` to check first.
     pub fn receive(&self) -> T {
+        // If `!self.ready.load(Acquire)` would be used here
+        // we would panic only if the message is not available yet
+        // but still permit mutiple receive calls.
         if !self.ready.swap(false, Acquire) {
             panic!("no message available!");
         }
