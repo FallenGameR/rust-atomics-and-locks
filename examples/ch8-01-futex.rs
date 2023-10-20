@@ -1,3 +1,4 @@
+// We don't have that capability in Windows, this is why Rust analyzer can't see main here.
 #![cfg(target_os = "linux")]
 
 use std::sync::atomic::AtomicU32;
