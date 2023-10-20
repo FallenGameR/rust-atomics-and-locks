@@ -48,7 +48,7 @@ impl<T> Channel<T> {
     // NOTE: The ordering here used to be Acquire.
     // Relaxed insures total modification order.
     //
-    // Thus if `is_ready/Relaxed` senced modification of `in_use` from `false` (in ctor) to `true` (in send)
+    // Thus if `is_ready/Relaxed` senced modification of `send_finished` from `false` (in ctor) to `true` (in send)
     // then the `receive/Acquire` would not see a different modification order and be consistent with it.
     //
     // There is no way to see `is_ready` returning true and `receive` still panicking regardless of the
@@ -63,6 +63,10 @@ impl<T> Channel<T> {
 
     // Panics when trying to send more than one message.
     pub fn send(&self, message: T) {
+        // Total modification order of Relaxed ensures that there would be only one
+        // modification (swap operation) of `send_started` from `false` (in ctor) to
+        // `true` (here, just after the swap that would return false) and that would
+        // be the only case which send will attempt to access the UnsafeCell.
         if self.send_started.swap(true, Relaxed) {
             panic!("can't send more than one message!");
         }
