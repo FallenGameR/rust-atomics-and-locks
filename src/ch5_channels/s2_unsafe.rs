@@ -17,8 +17,15 @@ pub struct Channel<T> {
 unsafe impl<T> Sync for Channel<T> where T: Send {}
 
 impl<T> Channel<T> {
-    // `const` allows the compiler to pre-create such a structure
-    // during compilation so that in runtime we can init is way faster
+    // `const` allows the compiler to pre-create such a structure during
+    // compilation so that in runtime we can init is faster. But in order
+    // to utilize that fast creation you got to use it during init of
+    // some const variable only.
+    //
+    // The current documentation says that const doesn't change anything
+    // in the runtime. Although I think it could pre-create memory layout
+    // for such structs faster even in runtime because it can pre-compile
+    // them and then just copy from a `template` it has.
     pub const fn new() -> Self {
         Self {
             message: UnsafeCell::new(MaybeUninit::uninit()),
