@@ -8,6 +8,12 @@ pub struct Channel<T> {
     ready: AtomicBool,
 }
 
+// We tell the compiler that Channel is safe to share between threads,
+// the UnsafeCell resets this guarantee so that we explicitly handle
+// this garantuees and mark it for the compiler with this annotation.
+//
+// Send means that we can copy the data to another thread.
+// Sync means that we can copy the reference of that data to another thread.
 unsafe impl<T> Sync for Channel<T> where T: Send {}
 
 impl<T> Channel<T> {
