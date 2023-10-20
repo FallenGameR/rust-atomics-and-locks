@@ -85,11 +85,12 @@ impl<T> Drop for Channel<T> {
         // If there is a message in the channel and it was not received
         // we need to clean it up.
         //
-        // But what if we are dropping the channel in the middle of receive?
-        // Then the message would be leaked. Either this or we should block
-        // here until the receive would finish.
-        //
-        // Is it ok to block in the middle of drop?
+        // We don't use Atomic API here since drop can happen from a thread that
+        // fully owns the object without any outstanding borrows. That also means
+        // that we can't be dropping the channel in the middle of receive and
+        // thus leak the contained message since the `send_finished` usage alone
+        // can't guarantee that (e.g. what if `drop` would be called just before
+        // the `assume_init_read`).
         if *self.send_finished.get_mut() {
             unsafe { self.message.get_mut().assume_init_drop() }
         }
