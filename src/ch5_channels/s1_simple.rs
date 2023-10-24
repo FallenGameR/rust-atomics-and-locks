@@ -23,7 +23,7 @@ impl<T> Channel<T> {
     }
 
     pub fn receive(&self) -> T {
-        // Problem: we are blocking queue for every item, fast bulk proessing is not possible.
+        // Problem: we are blocking queue for every item, fast bulk processing is not possible.
         // Problem: there could be only one receiver (we would not adress this in that book).
         let mut b = self.queue.lock().unwrap();
         loop {
