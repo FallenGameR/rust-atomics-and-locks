@@ -3,6 +3,9 @@ use std::mem::MaybeUninit;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
+// State of the channel is stored in 2 atomic bool variables,
+// and it looks like they are not enough since there is more
+// to the state than they claim to describe
 pub struct Channel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
     // Indicates if send has already started

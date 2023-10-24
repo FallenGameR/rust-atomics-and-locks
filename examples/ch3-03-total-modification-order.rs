@@ -17,6 +17,9 @@ fn b() {
     println!("{a} {b} {c} {d}");
 }
 
+// Modification order of a variable is seen consistently across all the threads
+// Possible output:   0-0-0-0   0-0-5-15   0-15-15-15
+// Impossible output: 0-5-0-15  0-0-10-15
 fn main() {
     thread::scope(|s| {
         s.spawn(a);

@@ -8,6 +8,8 @@ const WRITING: u8 = 1;
 const READY: u8 = 2;
 const READING: u8 = 3;
 
+// State here represents just one variable and it is more explicit and deterministic
+// I like this version better
 pub struct Channel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
     state: AtomicU8,
