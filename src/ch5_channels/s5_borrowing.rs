@@ -27,7 +27,10 @@ impl<T> Channel<T> {
     }
 
     // Since channel is explicitly borrowed here (mut) Rust would prevent
-    // code to borrow or move it unless both Sender and Receiver are dropped
+    // code to borrow or move it unless both Sender and Receiver are dropped.
+    //
+    // The lifetime of the signature comes from self, so it actually can be ellided:
+    // pub fn split(& mut self) -> (Sender<T>, Receiver<T>)
     pub fn split<'a>(&'a mut self) -> (Sender<'a, T>, Receiver<'a, T>) {
         // This is a safety added in case we reuse the channel after
         // both the sender and receiver were used once.
@@ -42,6 +45,7 @@ impl<T> Channel<T> {
     }
 }
 
+// Not possible to elide the lifetime parameter, it is important part of the signature
 impl<T> Sender<'_, T> {
     pub fn send(self, message: T) {
         unsafe { (*self.channel.message.get()).write(message) };
@@ -49,6 +53,7 @@ impl<T> Sender<'_, T> {
     }
 }
 
+// Not possible to elide the lifetime parameter, it is important part of the signature
 impl<T> Receiver<'_, T> {
     pub fn is_ready(&self) -> bool {
         self.channel.ready.load(Relaxed)
@@ -73,7 +78,12 @@ impl<T> Drop for Channel<T> {
 #[test]
 fn main() {
     use std::thread;
+
+    // Channel needs to be created before the scope
+    // so that the compiler can check that its existence
+    // would outlive both the sender and receiver.
     let mut channel = Channel::new();
+
     thread::scope(|s| {
         let (sender, receiver) = channel.split();
         let t = thread::current();
