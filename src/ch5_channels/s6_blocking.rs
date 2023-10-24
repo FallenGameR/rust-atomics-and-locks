@@ -66,8 +66,12 @@ impl<T> Sender<'_, T> {
 
 impl<T> Receiver<'_, T> {
     pub fn receive(self) -> T {
+        // The cycle is still needed here since a thread may get CPU time
+        // even if send didn't call the unpark yet.
         while !self.channel.ready.swap(false, Acquire) {
-            // why not receiving_thread::park()?
+            // It looks like we could also do the receiving_thread::park() here
+            // but we decided to save some memory and showcase the usage of PhantomData.
+            // Plus this way we guarantee that the receiver is not moved to another thread.
             thread::park();
         }
         unsafe { (*self.channel.message.get()).assume_init_read() }
