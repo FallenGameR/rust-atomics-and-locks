@@ -20,7 +20,7 @@ pub struct Sender<'a, T> {
 
 pub struct Receiver<'a, T> {
     channel: &'a Channel<T>,
-    _no_send: PhantomData<*const ()>, // New!
+    _no_send: PhantomData<*const ()>, // New! Pointer types are not Send, so Receiver is not Send and can't be moved to another thread
 }
 
 impl<T> Channel<T> {
@@ -38,6 +38,16 @@ impl<T> Channel<T> {
                 channel: self,
                 receiving_thread: thread::current(), // New!
             },
+
+            // If receiver is moved to another thread then sender would use notifying a wrong thread.
+            // To prevent that from happening we prohibit moving the receiver to another thread by
+            // breaking the Send trait. We add data that doesn't have Send on it. But we don't want
+            // to add any unnecessary data, so we use PhantomData of the pointer type that is not Send.
+            //
+            // Interestingly that still can be broken in the case we move receiver to another thread =)
+            // Looks like Sender needs to have the Send broken as well. Not sure if Thread is would
+            // break the Send trait here.
+
             Receiver {
                 channel: self,
                 _no_send: PhantomData, // New!
@@ -57,6 +67,7 @@ impl<T> Sender<'_, T> {
 impl<T> Receiver<'_, T> {
     pub fn receive(self) -> T {
         while !self.channel.ready.swap(false, Acquire) {
+            // why not receiving_thread::park()?
             thread::park();
         }
         unsafe { (*self.channel.message.get()).assume_init_read() }
