@@ -83,6 +83,8 @@ fn main() {
             t.unpark();
         });
         while !receiver.is_ready() {
+            // We would introduce a blocking channel a bit later.
+            // For now we manually park the thread.
             thread::park();
         }
         assert_eq!(receiver.receive(), "hello world!");
