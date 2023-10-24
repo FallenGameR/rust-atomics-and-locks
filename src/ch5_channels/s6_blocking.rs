@@ -44,9 +44,9 @@ impl<T> Channel<T> {
             // breaking the Send trait. We add data that doesn't have Send on it. But we don't want
             // to add any unnecessary data, so we use PhantomData of the pointer type that is not Send.
             //
-            // Interestingly that still can be broken in the case we move receiver to another thread =)
-            // Looks like Sender needs to have the Send broken as well. Not sure if Thread is would
-            // break the Send trait here.
+            // We bind the receiver to stay on the same thread that was executing when the sender was
+            // created. So even if the sender would be moved to anther thread it would still unpark
+            // the correct thread where the receiver is.
 
             Receiver {
                 channel: self,
