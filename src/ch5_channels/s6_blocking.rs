@@ -39,7 +39,7 @@ impl<T> Channel<T> {
                 receiving_thread: thread::current(), // New!
             },
 
-            // If receiver is moved to another thread then sender would use notifying a wrong thread.
+            // If receiver is moved to another thread then sender could be notifying a wrong thread.
             // To prevent that from happening we prohibit moving the receiver to another thread by
             // breaking the Send trait. We add data that doesn't have Send on it. But we don't want
             // to add any unnecessary data, so we use PhantomData of the pointer type that is not Send.
