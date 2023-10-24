@@ -20,10 +20,14 @@ fn b() {
     println!("{a} {b} {c} {d}");
 }
 
+// Possible orders: 0-0-0  5-5-5  10-10-10  0-5-15  0-10-15
+// If a single b sees 5 then no other b can see 10
 fn main() {
     thread::scope(|s| {
         s.spawn(a1);
         s.spawn(a2);
+        s.spawn(b);
+        s.spawn(b);
         s.spawn(b);
     });
 }
