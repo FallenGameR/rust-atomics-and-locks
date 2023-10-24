@@ -7,6 +7,8 @@ static B: AtomicBool = AtomicBool::new(false);
 
 static mut S: String = String::new();
 
+// All operation in sequentially consistent order form a single total order observable from all the threads
+
 fn main() {
     let a = thread::spawn(|| {
         A.store(true, SeqCst);
