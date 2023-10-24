@@ -51,6 +51,16 @@ impl<T> Receiver<T> {
 
 
 impl<T> Drop for Channel<T> {
+    // We don't use Atomic API here since drop can only happen from a thread that
+    // fully owns the object without any outstanding borrows (the mut in the signature).
+    //
+    // That also means that we can't be dropping the channel in the middle of receive
+    // and thus leak the contained message since the `ready` usage alone can't guarantee
+    // that (e.g. what if `drop` would be called just before the `assume_init_read`).
+    //
+    // After the drop is called Rust ensures that nobody can use that variable anymore.
+    // So we are safe doing any kind of stuff with it not worrying about mutithreading
+    // and a possibility of code that would mess up the state after it was dropped.
     fn drop(&mut self) {
         if *self.ready.get_mut() {
             unsafe { self.message.get_mut().assume_init_drop() }
