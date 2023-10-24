@@ -46,6 +46,10 @@ impl<T> Receiver<T> {
             panic!("no message available!");
         }
         unsafe { (*self.channel.message.get()).assume_init_read() }
+
+        // After receive would be done the self would be dropped, the arc of the channel
+        // would decrease and if send already did the same that would be the time when
+        // drop would be called on the underlying channel.
     }
 }
 
