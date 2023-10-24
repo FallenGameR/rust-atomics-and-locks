@@ -87,10 +87,16 @@ fn main() {
     thread::scope(|s| {
         let (sender, receiver) = channel.split();
         let t = thread::current();
+
         s.spawn(move || {
             sender.send("hello world!");
             t.unpark();
         });
+
+        // Borrow checker would say that this is an error
+        // But it ok in places when both sender and receiver are dropped or unsued yet
+        // let (sender, receiver) = channel.split();
+
         while !receiver.is_ready() {
             thread::park();
         }
