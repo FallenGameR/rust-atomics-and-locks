@@ -4,6 +4,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::sync::Arc;
 
+
 pub struct Sender<T> {
     channel: Arc<Channel<T>>,
 }
@@ -12,17 +13,20 @@ pub struct Receiver<T> {
     channel: Arc<Channel<T>>,
 }
 
+// Not public since implementation details are not relevant to the user
+struct Channel<T> {
+    message: UnsafeCell<MaybeUninit<T>>,
+    ready: AtomicBool,
+}
+
+unsafe impl<T> Sync for Channel<T> where T: Send {}
+
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     let a = Arc::new(Channel {
         message: UnsafeCell::new(MaybeUninit::uninit()),
         ready: AtomicBool::new(false),
     });
     (Sender { channel: a.clone() }, Receiver { channel: a })
-}
-
-struct Channel<T> {
-    message: UnsafeCell<MaybeUninit<T>>,
-    ready: AtomicBool,
 }
 
 impl<T> Sender<T> {
@@ -45,7 +49,6 @@ impl<T> Receiver<T> {
     }
 }
 
-unsafe impl<T> Sync for Channel<T> where T: Send {}
 
 impl<T> Drop for Channel<T> {
     fn drop(&mut self) {
