@@ -29,11 +29,13 @@ impl<T> Channel<T> {
     // Since channel is explicitly borrowed here (mut) Rust would prevent
     // code to borrow or move it unless both Sender and Receiver are dropped
     pub fn split<'a>(&'a mut self) -> (Sender<'a, T>, Receiver<'a, T>) {
-
         // This is a safety added in case we reuse the channel after
         // both the sender and receiver were used once.
         // If channel would not be reused then this line can be skipped,
         // but we can't guarantee that via static analysis.
+        //
+        // This is also where the drop on a reused channel would happen.
+        // Otherwise the drop would happen when the channel be out of scope.
         *self = Self::new();
 
         (Sender { channel: self }, Receiver { channel: self })
