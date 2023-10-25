@@ -88,9 +88,25 @@ impl<T> Clone for Arc<T> {
 
 impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
+        // Last decrement that gets the value to 0 means we need to drop the Arc
+        // We can't use Relaxed here since we need to ensure that all concurrent
+        // drops (that just did -- and ended through the if statement) have
+        // already happened before the last drop.
         if self.data().ref_count.fetch_sub(1, Release) == 1 {
+            // Strictly speaking all decrements except the last one need to use Release.
+            // But the very last decrement needs to use the Acquire.
+            // We optimized this a bit with doing all decrements with Release
+            // and adding an explicit Aquire fence to ensure the ordering.
+            //
+            // Alternativelly we could have used AcqRel ordering for all decrements
+            // and don't use the fence. But Mara Bos says that this is more
+            // effient this way.
+            //
+            // All release operations need to finish strictly before this fence.
             fence(Acquire);
+
             unsafe {
+                // Box::from_raw reverses Box::leak we did in ctor
                 drop(Box::from_raw(self.ptr.as_ptr()));
             }
         }
