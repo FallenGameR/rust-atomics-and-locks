@@ -17,12 +17,22 @@ pub struct Arc<T> {
 }
 
 // For structs with pointers and NonNull Rust drops Send and Sync
+//
+// Arc can be Send to another thread - it can be moved and that other thread
+// will be the new owner of it and it would eventually have to drop it.
+// - When Arc implements Send it means that the data can be moved
+// to another thread and that thread then can drop it, so T must be Send.
+// - When Arc implements Send it means that the data it stores
+// (the reference) is also sent to another thread, so T must be Sync.
 unsafe impl<T: Send + Sync> Send for Arc<T> {}
+// Also since &Arc can be cloned into Arc, the Arc need to implement Sync.
 unsafe impl<T: Send + Sync> Sync for Arc<T> {}
 
 impl<T> Arc<T> {
     pub fn new(data: T) -> Arc<T> {
         Arc {
+            // Box::leak gives up exclusive ownership of the allocation
+            // It returns the & mut and instructs the compiler not to call drop on it
             ptr: NonNull::from(Box::leak(Box::new(ArcData {
                 ref_count: AtomicUsize::new(1),
                 data,
