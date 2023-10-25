@@ -66,9 +66,19 @@ impl<T> Deref for Arc<T> {
 
 impl<T> Clone for Arc<T> {
     fn clone(&self) -> Self {
-        if self.data().ref_count.fetch_add(1, Relaxed) > usize::MAX / 2 {
+        // Increment the reference count in a thread safe way
+        let new_count = self.data().ref_count.fetch_add(1, Relaxed);
+
+        // Fast way to handle possible overflows with an abort.
+        //
+        // Relaxed is ok to use here since we don't have operations
+        // on other variagbles that got to happen strictly before
+        // or after this += operation and the Relaxed ordering
+        // would observe the same modification order anyway.
+        if new_count > usize::MAX / 2 {
             std::process::abort();
         }
+
         Arc {
             ptr: self.ptr,
         }
