@@ -10,9 +10,13 @@ struct ArcData<T> {
 }
 
 pub struct Arc<T> {
+    // NotNull not only makes sure statically the pointer is never null
+    // but it also alows the compiler to optimize memory placement
+    // and use the same size of data for both Arc and Option<Arc>.
     ptr: NonNull<ArcData<T>>,
 }
 
+// For structs with pointers and NonNull Rust drops Send and Sync
 unsafe impl<T: Send + Sync> Send for Arc<T> {}
 unsafe impl<T: Send + Sync> Sync for Arc<T> {}
 
