@@ -14,13 +14,17 @@ struct ArcData<T> {
     data: UnsafeCell<Option<T>>,
 }
 
+// When all Arc objects are gone, the T data is dropped,
+// regardless of how many Weak<T> objects are left.
+// Needed for recursive data structures like cyclic graphs.
+pub struct Weak<T> {
+    ptr: NonNull<ArcData<T>>,
+}
+
 pub struct Arc<T> {
     weak: Weak<T>,
 }
 
-pub struct Weak<T> {
-    ptr: NonNull<ArcData<T>>,
-}
 
 unsafe impl<T: Sync + Send> Send for Weak<T> {}
 unsafe impl<T: Sync + Send> Sync for Weak<T> {}
