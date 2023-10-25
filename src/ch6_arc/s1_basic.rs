@@ -48,6 +48,11 @@ impl<T> Arc<T> {
     // would be able to clone Arc (Clone requires &) while we are
     // exclusivelly holding the & mut T reference with the same
     // lifetime as Arc.
+    //
+    // We don't use self here and the caller would need to use the
+    // Arc::get_mut(&mut a) syntax. That is Rust convention for
+    // types that implement Deref since otherwise it would be
+    // easy to mistake get_mut call on Arc vs T that is holds.
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
         if arc.data().ref_count.load(Relaxed) == 1 {
             fence(Acquire);
