@@ -44,6 +44,10 @@ impl<T> Arc<T> {
         unsafe { self.ptr.as_ref() }
     }
 
+    // Since this method takes & mut we ensure that no other thread
+    // would be able to clone Arc (Clone requires &) while we are
+    // exclusivelly holding the & mut T reference with the same
+    // lifetime as Arc.
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
         if arc.data().ref_count.load(Relaxed) == 1 {
             fence(Acquire);
