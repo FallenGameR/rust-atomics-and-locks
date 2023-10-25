@@ -70,6 +70,7 @@ impl<T> Clone for Arc<T> {
         let new_count = self.data().ref_count.fetch_add(1, Relaxed);
 
         // Fast way to handle possible overflows with an abort.
+        // It is impossible to have usize::MAX / 2 threads running concurrently.
         //
         // Relaxed is ok to use here since we don't have operations
         // on other variagbles that got to happen strictly before
