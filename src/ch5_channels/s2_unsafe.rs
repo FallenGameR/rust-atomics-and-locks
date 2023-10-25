@@ -15,8 +15,9 @@ pub struct Channel<T> {
 // We are saying - ok, the compiler can't guarantee safety, but our
 // code implementation that would use unsafe code will guarantee it.
 //
-// Send means that we can copy the data to another thread.
-// Sync means that we can copy the reference of that data to another thread.
+// Send means that we can copy (move) the data to another thread.
+// Sync means that we can copy (move) the reference of that data to another thread.
+// Moving in Rust transfers ownership. And ownership means who can drop the object.
 unsafe impl<T> Sync for Channel<T> where T: Send {}
 
 // Problem: there is no Drop - it can't drop it's content when it goes out of scope,
