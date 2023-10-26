@@ -134,6 +134,10 @@ impl<T> Drop for Weak<T> {
         if self.data().alloc_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
             unsafe {
+                // Pointer we are dropping here is NotNull pointer to the ArcData
+                // not the T that ArcData is holding. That pointer should have
+                // been just dropped by the Arc's drop that was called just before
+                // this drop.
                 drop(Box::from_raw(self.ptr.as_ptr()));
             }
         }
@@ -144,17 +148,18 @@ impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
         // Dropping an Arc would also drop the Week that it contains.
         // First this function would be called, then the Week's drop.
-        //
-        // If that is so it's unclear how Week would get to drop the T
-        // Since here we are setting the ptr to None.
-
         if self.weak.data().data_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
-            let ptr = self.weak.data().data.get();
+
+            // Pointer here references the T data and it is an Option
+            // We can set to to None to drop the data but that would
+            // not drop the NonNull ptr to ArcData.
+            let data = self.weak.data().data.get();
+
             // Safety: The data reference counter is zero,
             // so nothing will access it.
             unsafe {
-                (*ptr) = None;
+                (*data) = None;
             }
         }
     }
