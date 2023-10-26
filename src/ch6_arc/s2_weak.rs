@@ -158,9 +158,7 @@ impl<T> Drop for Arc<T> {
 
             // Safety: The data reference counter is zero,
             // so nothing will access it.
-            unsafe {
-                (*data) = None;
-            }
+            unsafe { (*data) = None; }
         }
     }
 }
