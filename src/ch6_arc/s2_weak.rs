@@ -6,17 +6,27 @@ use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::ptr::NonNull;
 
 struct ArcData<T> {
-    /// Number of `Arc`s.
+    /// Number of Arc`s - number of things that reference T
     data_ref_count: AtomicUsize,
-    /// Number of `Arc`s and `Weak`s combined.
+
+    /// Number of Arc`s and Weak`s combined - number of things that reference ArcData itself.
+    /// Week pointers can't pin the T though.
     alloc_ref_count: AtomicUsize,
-    /// The data. `None` if there's only weak pointers left.
+
+    /// The data, `None` if there's only weak pointers left.
+    /// UnsafeCell is needed for interrior mutability (be able to mutate the data through shared reference).
     data: UnsafeCell<Option<T>>,
 }
 
 // When all Arc objects are gone, the T data is dropped,
 // regardless of how many Weak<T> objects are left.
-// Needed for recursive data structures like cyclic graphs.
+//
+// Needed for recursive data structures like graphs.
+// Children can have a Week reference to their parent.
+//
+// Week can exist without T. It can't provide T without
+// additional condition like Arc can. But Week can be
+// upgraded to Arc if T is still available.
 pub struct Weak<T> {
     ptr: NonNull<ArcData<T>>,
 }
@@ -132,6 +142,12 @@ impl<T> Drop for Weak<T> {
 
 impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
+        // Dropping an Arc would also drop the Week that it contains.
+        // First this function would be called, then the Week's drop.
+        //
+        // If that is so it's unclear how Week would get to drop the T
+        // Since here we are setting the ptr to None.
+
         if self.weak.data().data_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
             let ptr = self.weak.data().data.get();
