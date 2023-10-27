@@ -1,10 +1,10 @@
-use std::mem::ManuallyDrop;
 use std::cell::UnsafeCell;
+use std::mem::ManuallyDrop;
 use std::ops::Deref;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::fence;
-use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::ptr::NonNull;
+use std::sync::atomic::fence;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 // Arc doesn't depend on Week.
 // But ArcData is aware of both.
@@ -34,6 +34,10 @@ struct ArcData<T> {
     /// cost when you are using Arc without Weak. Cloning an Arc doesn't
     /// need to touch this counter at all. Only dropping the very
     /// last Arc would decrements this pointer too.
+    ///
+    /// When getting the &mut t_data we would need to view the state of
+    /// both alloc_ref_count and data_ref_count at the same time. To do that
+    /// we would store usize::MAX in alloc_ref_count.
     alloc_ref_count: AtomicUsize,
 
     /// The data. Dropped if there are only weak pointers left.
@@ -72,12 +76,23 @@ impl<T> Arc<T> {
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
         // Acquire matches Weak::drop's Release decrement, to make sure any
         // upgraded pointers are visible in the next data_ref_count.load.
-        if arc.arc_data().alloc_ref_count.compare_exchange(
-            1, usize::MAX, Acquire, Relaxed
-        ).is_err() {
+        if arc
+            .arc_data()
+            .alloc_ref_count
+            .compare_exchange(1, usize::MAX, Acquire, Relaxed)
+            .is_err()
+        {
             return None;
         }
+
+        // We could race with:
+        // - Arc.downgrade - but it knows about usize::MAX convention and
+        // it would spin loop until some other value would be stored here.
+        // - Week.clone and Week.drop - but they are not possible since
+        // we just observed alloc_ref_count == 1 meaning that there are
+        // no week pointers and there is only a single Arc that we own.
         let is_unique = arc.arc_data().data_ref_count.load(Relaxed) == 1;
+
         // Release matches Acquire increment in `downgrade`, to make sure any
         // changes to the data_ref_count that come after `downgrade` don't
         // change the is_unique result above.
@@ -130,6 +145,8 @@ impl<T> Weak<T> {
     }
 
     pub fn upgrade(&self) -> Option<Arc<T>> {
+        // Note that we don't modify alloc_ref_count here anymore.
+
         let mut n = self.arc_data().data_ref_count.load(Relaxed);
         loop {
             if n == 0 {
@@ -162,7 +179,9 @@ impl<T> Drop for Weak<T> {
     fn drop(&mut self) {
         if self.arc_data().alloc_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
-            unsafe { drop(Box::from_raw(self.ptr.as_ptr())); }
+            unsafe {
+                drop(Box::from_raw(self.ptr.as_ptr()));
+            }
         }
     }
 }
@@ -195,7 +214,9 @@ impl<T> Drop for Arc<T> {
             // to Arc first.
             //
             // This drops the t_data.
-            unsafe { ManuallyDrop::drop(&mut *self.arc_data().t_data.get()); }
+            unsafe {
+                ManuallyDrop::drop(&mut *self.arc_data().t_data.get());
+            }
 
             // Now that there's no `Arc<T>`s left,
             // drop the implicit weak pointer that represented all `Arc<T>`s.
