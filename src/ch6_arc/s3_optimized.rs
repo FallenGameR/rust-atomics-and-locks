@@ -73,9 +73,33 @@ impl<T> Arc<T> {
         unsafe { self.ptr.as_ref() }
     }
 
+    // Here is the kind of code we would like to be able to handle:
+    //
+    // let mut arc = Arc::new(42);
+    //
+    // // Unclear how this is possible, but it's like the author
+    // // assumes that this is possible and it does happen.
+    // pass_arc_to_another_thread(&arc);
+    //
+    // loop {
+    //      let week = Arc::downgrade(&arc);
+    //      drop(arc);
+    //      println!("There is no Arc, only Week");
+    //
+    //      arc = week.upgrade().unwrap();
+    //      drop(week);
+    //      println!("There is no Week, only Arc");
+    // }
+    //
+    // Let's say that pass_arc_to_another_thread doesn't happen
+    // and we just cycle through Arc and Week that operate on
+    // the same ArcData. Internally they would need to deal
+    // wtith two atomic values: alloc_ref_count and data_ref_count.
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
         // Acquire matches Weak::drop's Release decrement, to make sure any
         // upgraded pointers are visible in the next data_ref_count.load.
+        //
+        // Locking operations uses the Acquire operation.
         if arc
             .arc_data()
             .alloc_ref_count
@@ -88,18 +112,34 @@ impl<T> Arc<T> {
         // We could race with:
         // - Arc.downgrade - but it knows about usize::MAX convention and
         // it would spin loop until some other value would be stored here.
-        // - Week.clone and Week.drop - but they are not possible since
-        // we just observed alloc_ref_count == 1 meaning that there are
-        // no week pointers and there is only a single Arc that we own.
+        // - Week.clone and Week.drop - but we just observed
+        // alloc_ref_count == 1 meaning and we are inside of an Arc method,
+        // so it means there were no other week references just now. The
+        // only way to have a Week reference at this point is to downgrade
+        // the current Arc in another thread. And that is possible only
+        // though the Arc.downgrade method that knows that we are still
+        // doing our work here.
+        //
+        // Since we have &mut Arc access here we can assume no other method
+        // would be called on it, Clone and Drop methods included.
+        // So the next check seems to be redundant.
         let is_unique = arc.arc_data().data_ref_count.load(Relaxed) == 1;
 
         // Release matches Acquire increment in `downgrade`, to make sure any
         // changes to the data_ref_count that come after `downgrade` don't
         // change the is_unique result above.
+        //
+        // Unlocking operation uses the Release operation.
         arc.arc_data().alloc_ref_count.store(1, Release);
         if !is_unique {
+            // Would this line ever be hit?
+            //
+            // The original comments imply that is a guard against concurrent
+            // downgrade calls, but I don't see how that could happen since
+            // we get exclusive reference to the Arc here.
             return None;
         }
+
         // Acquire to match Arc::drop's Release decrement, to make sure nothing
         // else is accessing the data.
         fence(Acquire);
@@ -168,6 +208,8 @@ impl<T> Weak<T> {
 
 impl<T> Clone for Weak<T> {
     fn clone(&self) -> Self {
+        // Relaxed is said to be ok here. It is unclear why since drop is using Release
+        // and if we need to sync drop and get_mut why we shouldn't sync get_mut and clone?
         if self.arc_data().alloc_ref_count.fetch_add(1, Relaxed) > usize::MAX / 2 {
             std::process::abort();
         }
@@ -177,6 +219,7 @@ impl<T> Clone for Weak<T> {
 
 impl<T> Drop for Weak<T> {
     fn drop(&mut self) {
+        // Release here is needed to coordinate with get_mut's Acquire load.
         if self.arc_data().alloc_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
             unsafe {
