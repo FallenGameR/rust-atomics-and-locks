@@ -115,19 +115,19 @@ impl<T> Deref for Arc<T> {
 }
 
 impl<T> Weak<T> {
-    fn data(&self) -> &ArcData<T> {
+    fn arc_data(&self) -> &ArcData<T> {
         unsafe { self.ptr.as_ref() }
     }
 
     pub fn upgrade(&self) -> Option<Arc<T>> {
-        let mut n = self.data().data_ref_count.load(Relaxed);
+        let mut n = self.arc_data().data_ref_count.load(Relaxed);
         loop {
             if n == 0 {
                 return None;
             }
             assert!(n <= usize::MAX / 2);
             if let Err(e) =
-                self.data()
+                self.arc_data()
                     .data_ref_count
                     .compare_exchange_weak(n, n + 1, Relaxed, Relaxed)
             {
@@ -141,7 +141,7 @@ impl<T> Weak<T> {
 
 impl<T> Clone for Weak<T> {
     fn clone(&self) -> Self {
-        if self.data().alloc_ref_count.fetch_add(1, Relaxed) > usize::MAX / 2 {
+        if self.arc_data().alloc_ref_count.fetch_add(1, Relaxed) > usize::MAX / 2 {
             std::process::abort();
         }
         Weak { ptr: self.ptr }
@@ -150,7 +150,7 @@ impl<T> Clone for Weak<T> {
 
 impl<T> Drop for Weak<T> {
     fn drop(&mut self) {
-        if self.data().alloc_ref_count.fetch_sub(1, Release) == 1 {
+        if self.arc_data().alloc_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
             unsafe {
                 drop(Box::from_raw(self.ptr.as_ptr()));
