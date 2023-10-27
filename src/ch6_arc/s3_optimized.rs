@@ -35,7 +35,13 @@ struct ArcData<T> {
     alloc_ref_count: AtomicUsize,
 
     /// The data. Dropped if there are only weak pointers left.
-    data: UnsafeCell<ManuallyDrop<T>>,
+    /// ManuallyDrop is smaller than Option (ManuallyDrop has 0 cost,
+    /// it is an instruction to compiler not to call drop).
+    ///
+    /// Previously we relied on Option = None to tell that there are
+    /// on Arcs left. But here we can rely on the data_ref_count and
+    /// alloc_ref_count.
+    t_data: UnsafeCell<ManuallyDrop<T>>,
 }
 
 impl<T> Arc<T> {
@@ -44,49 +50,49 @@ impl<T> Arc<T> {
             ptr: NonNull::from(Box::leak(Box::new(ArcData {
                 alloc_ref_count: AtomicUsize::new(1),
                 data_ref_count: AtomicUsize::new(1),
-                data: UnsafeCell::new(ManuallyDrop::new(data)),
+                t_data: UnsafeCell::new(ManuallyDrop::new(data)),
             }))),
         }
     }
 
-    fn data(&self) -> &ArcData<T> {
+    fn arc_data(&self) -> &ArcData<T> {
         unsafe { self.ptr.as_ref() }
     }
 
     pub fn get_mut(arc: &mut Self) -> Option<&mut T> {
         // Acquire matches Weak::drop's Release decrement, to make sure any
         // upgraded pointers are visible in the next data_ref_count.load.
-        if arc.data().alloc_ref_count.compare_exchange(
+        if arc.arc_data().alloc_ref_count.compare_exchange(
             1, usize::MAX, Acquire, Relaxed
         ).is_err() {
             return None;
         }
-        let is_unique = arc.data().data_ref_count.load(Relaxed) == 1;
+        let is_unique = arc.arc_data().data_ref_count.load(Relaxed) == 1;
         // Release matches Acquire increment in `downgrade`, to make sure any
         // changes to the data_ref_count that come after `downgrade` don't
         // change the is_unique result above.
-        arc.data().alloc_ref_count.store(1, Release);
+        arc.arc_data().alloc_ref_count.store(1, Release);
         if !is_unique {
             return None;
         }
         // Acquire to match Arc::drop's Release decrement, to make sure nothing
         // else is accessing the data.
         fence(Acquire);
-        unsafe { Some(&mut *arc.data().data.get()) }
+        unsafe { Some(&mut *arc.arc_data().t_data.get()) }
     }
 
     pub fn downgrade(arc: &Self) -> Weak<T> {
-        let mut n = arc.data().alloc_ref_count.load(Relaxed);
+        let mut n = arc.arc_data().alloc_ref_count.load(Relaxed);
         loop {
             if n == usize::MAX {
                 std::hint::spin_loop();
-                n = arc.data().alloc_ref_count.load(Relaxed);
+                n = arc.arc_data().alloc_ref_count.load(Relaxed);
                 continue;
             }
             assert!(n <= usize::MAX / 2);
             // Acquire synchronises with get_mut's release-store.
             if let Err(e) =
-                arc.data()
+                arc.arc_data()
                     .alloc_ref_count
                     .compare_exchange_weak(n, n + 1, Acquire, Relaxed)
             {
@@ -104,7 +110,7 @@ impl<T> Deref for Arc<T> {
     fn deref(&self) -> &T {
         // Safety: Since there's an Arc to the data,
         // the data exists and may be shared.
-        unsafe { &*self.data().data.get() }
+        unsafe { &*self.arc_data().t_data.get() }
     }
 }
 
@@ -159,7 +165,7 @@ impl<T> Clone for Arc<T> {
         // that invloves another atomic operation. Atomic operations are costly.
         //let weak = self.weak.clone();
 
-        if self.data().data_ref_count.fetch_add(1, Relaxed) > usize::MAX / 2 {
+        if self.arc_data().data_ref_count.fetch_add(1, Relaxed) > usize::MAX / 2 {
             std::process::abort();
         }
         Arc { ptr: self.ptr }
@@ -168,12 +174,12 @@ impl<T> Clone for Arc<T> {
 
 impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
-        if self.data().data_ref_count.fetch_sub(1, Release) == 1 {
+        if self.arc_data().data_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
             // Safety: The data reference counter is zero,
             // so nothing will access the data anymore.
             unsafe {
-                ManuallyDrop::drop(&mut *self.data().data.get());
+                ManuallyDrop::drop(&mut *self.arc_data().t_data.get());
             }
             // Now that there's no `Arc<T>`s left,
             // drop the implicit weak pointer that represented all `Arc<T>`s.
