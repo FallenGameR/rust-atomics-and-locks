@@ -6,6 +6,8 @@ use std::sync::atomic::fence;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::ptr::NonNull;
 
+// Arc doesn't depend on Week.
+// But ArcData is aware of both.
 pub struct Arc<T> {
     ptr: NonNull<ArcData<T>>,
 }
@@ -24,6 +26,10 @@ struct ArcData<T> {
     /// Number of `Arc`s.
     data_ref_count: AtomicUsize,
     /// Number of `Weak`s, plus one if there are any `Arc`s.
+    /// That is the optimization not to pay the additional cost
+    /// when you are using Arc without Weak. Cloning an Arc doesn't
+    /// need to touch this counter at all. Only dropping the very
+    /// last Arc would decrement this pointer too.
     alloc_ref_count: AtomicUsize,
     /// The data. Dropped if there are only weak pointers left.
     data: UnsafeCell<ManuallyDrop<T>>,
@@ -146,6 +152,10 @@ impl<T> Drop for Weak<T> {
 
 impl<T> Clone for Arc<T> {
     fn clone(&self) -> Self {
+        // All this optimization is needed to skip the following commented line
+        // that invloves another atomic operation. Atomic operations are costly.
+        //let weak = self.weak.clone();
+
         if self.data().data_ref_count.fetch_add(1, Relaxed) > usize::MAX / 2 {
             std::process::abort();
         }
