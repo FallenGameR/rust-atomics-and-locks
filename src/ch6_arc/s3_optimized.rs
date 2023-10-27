@@ -22,6 +22,8 @@ pub struct Weak<T> {
 unsafe impl<T: Sync + Send> Send for Weak<T> {}
 unsafe impl<T: Sync + Send> Sync for Weak<T> {}
 
+// The data that both Arc and Week share and modify.
+// Week can be created only from an Arc.
 struct ArcData<T> {
     /// Number of `Arc`s.
     data_ref_count: AtomicUsize,
@@ -48,6 +50,14 @@ impl<T> Arc<T> {
     pub fn new(data: T) -> Arc<T> {
         Arc {
             ptr: NonNull::from(Box::leak(Box::new(ArcData {
+                // The additional cost for the first Arc.
+                // Upgraded Weak pointers will not increment it.
+                // And the last Arc will decrement it by explicitly
+                // calling drop on the ArcData wrapped in a Week
+                // struct.
+                //
+                // Note that there is no Week::new method that
+                // would do something similar to Arc::new.
                 alloc_ref_count: AtomicUsize::new(1),
                 data_ref_count: AtomicUsize::new(1),
                 t_data: UnsafeCell::new(ManuallyDrop::new(data)),
@@ -152,9 +162,7 @@ impl<T> Drop for Weak<T> {
     fn drop(&mut self) {
         if self.arc_data().alloc_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
-            unsafe {
-                drop(Box::from_raw(self.ptr.as_ptr()));
-            }
+            unsafe { drop(Box::from_raw(self.ptr.as_ptr())); }
         }
     }
 }
@@ -176,13 +184,24 @@ impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
         if self.arc_data().data_ref_count.fetch_sub(1, Release) == 1 {
             fence(Acquire);
+
             // Safety: The data reference counter is zero,
             // so nothing will access the data anymore.
-            unsafe {
-                ManuallyDrop::drop(&mut *self.arc_data().t_data.get());
-            }
+            //
+            // But what if somebody works with t_data from a week pointer
+            // while we are dropping it here? It is not possible because
+            // we are the last Arc and we are dropping it. And to work
+            // with the data via a weak pointer you need to upgrade it
+            // to Arc first.
+            //
+            // This drops the t_data.
+            unsafe { ManuallyDrop::drop(&mut *self.arc_data().t_data.get()); }
+
             // Now that there's no `Arc<T>`s left,
             // drop the implicit weak pointer that represented all `Arc<T>`s.
+            // That would cause Weak::drop to be called and alloc_ref_count to be decremented.
+            //
+            // This drops the ArcData.
             drop(Weak { ptr: self.ptr });
         }
     }
