@@ -25,12 +25,15 @@ unsafe impl<T: Sync + Send> Sync for Weak<T> {}
 struct ArcData<T> {
     /// Number of `Arc`s.
     data_ref_count: AtomicUsize,
+
     /// Number of `Weak`s, plus one if there are any `Arc`s.
-    /// That is the optimization not to pay the additional cost
-    /// when you are using Arc without Weak. Cloning an Arc doesn't
+    ///
+    /// That is the optimization implemented to not pay the additional
+    /// cost when you are using Arc without Weak. Cloning an Arc doesn't
     /// need to touch this counter at all. Only dropping the very
-    /// last Arc would decrement this pointer too.
+    /// last Arc would decrements this pointer too.
     alloc_ref_count: AtomicUsize,
+
     /// The data. Dropped if there are only weak pointers left.
     data: UnsafeCell<ManuallyDrop<T>>,
 }
