@@ -137,6 +137,10 @@ impl<T> Arc<T> {
             // The original comments imply that is a guard against concurrent
             // downgrade calls, but I don't see how that could happen since
             // we get exclusive reference to the Arc here.
+            //
+            // The author also says that Arc is one of the most complex
+            // cases of working with memory ordering correctly. I just
+            // hope that they tested the shit out of the std Arc implementation.
             return None;
         }
 
@@ -150,6 +154,8 @@ impl<T> Arc<T> {
         let mut n = arc.arc_data().alloc_ref_count.load(Relaxed);
         loop {
             if n == usize::MAX {
+                // Using a spin lock is a valid strategy that deals
+                // with mutiple atomic variables at once.
                 std::hint::spin_loop();
                 n = arc.arc_data().alloc_ref_count.load(Relaxed);
                 continue;
@@ -210,6 +216,10 @@ impl<T> Clone for Weak<T> {
     fn clone(&self) -> Self {
         // Relaxed is said to be ok here. It is unclear why since drop is using Release
         // and if we need to sync drop and get_mut why we shouldn't sync get_mut and clone?
+        //
+        // Found the following passage that addresses this question: in the chapter summary
+        // the author says that incrementing the reference counter can be done in a relaxed way,
+        // but the **final** decrement must be syncronized with all the previous decrements.
         if self.arc_data().alloc_ref_count.fetch_add(1, Relaxed) > usize::MAX / 2 {
             std::process::abort();
         }
