@@ -94,6 +94,7 @@ pub fn load_relaxed(x: &AtomicI32) -> i32 {
 
 ; X64 is CISC architecture - complex instruction set computer
 example::read_modify_write:
+  ;
   ; although it looks atomic, it is actually not
   ; the processor would split this `add` operation
   ; into several microinstructions similar to RISC
@@ -104,6 +105,7 @@ example::read_modify_write:
   ;
   ; but modern CPUs are muti-core and there we don't
   ; have such guarantee
+  ;
   add dword ptr [rdi], 10
   ret
 
@@ -119,4 +121,44 @@ example::read_modify_write:
 */
 pub fn read_modify_write(x: &mut i32) {
     *x += 10;
+}
+
+/*
+
+;
+; `lock` would prohibit other cores to access
+; the same memory region until the `add` operation
+; is finished. The very first implementation of
+; the `lock` stopped all other cores altogether.
+;
+; lock is implemented for add, sub, and, or, xor
+; lock is automatically applied to all xchg operations (atomic swap)
+;
+example::read_modify_write_relaxed:
+  lock add dword ptr [rdi], 10
+  ret
+*/
+
+pub fn read_modify_write_relaxed(x: &AtomicI32) {
+    x.fetch_add(10, Relaxed);
+}
+
+/*
+;
+; add doesn't return the result of the operation, it only populates
+; the flag register with the metadata of the operation results
+;
+; if we need to return the result of our operation, we need to use
+; xadd that is `add and exchange` that in our case populates eax
+; that by the x86 convention is used to return the result of the function
+;
+example::read_modify_write_relaxed_return:
+  mov eax, 10
+  lock xadd dword ptr [rdi], eax
+  ret
+
+*/
+
+pub fn read_modify_write_relaxed_return(x: &AtomicI32) -> i32 {
+    x.fetch_add(10, Relaxed)
 }
