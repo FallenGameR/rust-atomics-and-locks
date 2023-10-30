@@ -197,7 +197,11 @@ pub fn read_modify_write_relaxed_compare_and_exchange(x: &AtomicI32) -> i32 {
 
 /*
 
+;
 ; the same code as above, but we implemented fetch_or ourselves
+; btw, on x86_64 both compare_exchange and compare_exchange_weak
+; compile to the `lock cmpxchg` instruction
+;
 example::read_modify_write_relaxed_compare_and_exchange_explicit:
   mov eax, dword ptr [rdi]
 .LBB8_1:
