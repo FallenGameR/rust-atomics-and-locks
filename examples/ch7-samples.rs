@@ -15,10 +15,10 @@ example::add_ten:
   ret
 
 example::add_ten:
-        ldr     w8, [x0]
-        add     w8, w8, #10
-        str     w8, [x0]
-        ret
+  ldr     w8, [x0]
+  add     w8, w8, #10
+  str     w8, [x0]
+  ret
 
 */
 pub fn add_ten(num: &mut i32) {
@@ -32,8 +32,8 @@ example::store:
   ret
 
 example::store:
-        str     wzr, [x0]
-        ret
+  str     wzr, [x0]
+  ret
 
 */
 pub fn store(num: &mut i32) {
@@ -47,12 +47,42 @@ example::store_relaxed:
   ret
 
 example::store_relaxed:
-        str     wzr, [x0]
-        ret
+  str     wzr, [x0]
+  ret
 
 */
 pub fn store_relaxed(num: &AtomicI32) {
     num.store(0, Relaxed);
+}
+
+/*
+
+example::load:
+  mov eax, dword ptr [rdi]
+  ret
+
+example::load:
+  ldr     w0, [x0]
+  ret
+
+*/
+pub fn load(x: &i32) -> i32 {
+    *x
+}
+
+/*
+
+example::load_relaxed:
+  mov eax, dword ptr [rdi]
+  ret
+
+example::load_relaxed:
+  ldr w0, [x0]
+  ret
+
+*/
+pub fn load_relaxed(x: &AtomicI32) -> i32 {
+    x.load(Relaxed)
 }
 
 fn main() {
