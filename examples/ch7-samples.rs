@@ -170,3 +170,51 @@ example::read_modify_write_relaxed_return:
 pub fn read_modify_write_relaxed_return(x: &AtomicI32) -> i32 {
     x.fetch_add(10, Relaxed)
 }
+
+
+/*
+
+;
+; similarly to how we can replace any atomic operation with the
+; compare-and-exchange loop the compiler does it for the cases
+; when an atomic operation is not implemented by the processor:
+;
+; examples/ch2-11-increment-with-compare-exchange.rs
+;
+example::read_modify_write_relaxed_compare_and_exchange:
+  mov eax, dword ptr [rdi]
+.LBB7_1:
+  mov ecx, eax
+  or ecx, 10
+  lock cmpxchg dword ptr [rdi], ecx
+  jne .LBB7_1
+  ret
+
+*/
+pub fn read_modify_write_relaxed_compare_and_exchange(x: &AtomicI32) -> i32 {
+    x.fetch_or(10, Relaxed)
+}
+
+/*
+
+; the same code as above, but we implemented fetch_or ourselves
+example::read_modify_write_relaxed_compare_and_exchange_explicit:
+  mov eax, dword ptr [rdi]
+.LBB8_1:
+  mov ecx, eax
+  or ecx, 10
+  lock cmpxchg dword ptr [rdi], ecx
+  jne .LBB8_1
+  ret
+
+*/
+pub fn read_modify_write_relaxed_compare_and_exchange_explicit(x: &AtomicI32) -> i32 {
+    let mut current = x.load(Relaxed);
+    loop {
+        let new = current | 10;
+        match x.compare_exchange(current, new, Relaxed, Relaxed) {
+            Ok(value) => return value,
+            Err(value) => current = value,
+        }
+    }
+}
