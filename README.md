@@ -74,6 +74,9 @@ The data structures from chapters 4, 5, 6, and 9 can be found in [src/](src/).
 ### Chapter 7 — Understanding the Processor
 
 - https://godbolt.org/
+- `--target=aarch64-unknown-linux-musl` - build for ARM64
+- `-O` - don't check for overflow
+- Use latest Rustc version, not nightly to use `-O`
 
 ### Chapter 8 — Operating System Primitives
 
