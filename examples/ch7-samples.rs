@@ -152,6 +152,14 @@ pub fn read_modify_write_relaxed(x: &AtomicI32) {
 ; xadd that is `add and exchange` that in our case populates eax
 ; that by the x86 convention is used to return the result of the function
 ;
+; note that there is no xsub, xand, xor, xxor operations.
+; - xsub can be implemented as xadd -value
+; - xor and xand can be implemented as `bts` = `bit test and set` or
+;   `btc` = `bit test and complement` operation in the case we are
+;    affecting only a single bit .or(1) .xor(-1)
+; - otherwise we need to use several instructions for fetch_or and fetch_and
+; - similarly there is no `lock` instruction for fetch_max and fetch_min
+;
 example::read_modify_write_relaxed_return:
   mov eax, 10
   lock xadd dword ptr [rdi], eax
