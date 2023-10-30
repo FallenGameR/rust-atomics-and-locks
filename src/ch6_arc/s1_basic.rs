@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::fence;
-use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
+use std::sync::atomic::Ordering::{Acquire, Relaxed, Release, AcqRel, SeqCst};
 use std::ptr::NonNull;
 
 struct ArcData<T> {
