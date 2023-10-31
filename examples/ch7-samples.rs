@@ -242,6 +242,11 @@ be a single core system where the core assumes the worst case (memory was potent
 modified) any time a thread switch occurs (on interrupt or context switch).
 So implementation would play it safe and cause the code to loop one more time.
 
+LL/SC is flexible in a way that it can be used to implement any kind of atomic
+operation. No need to have specialized xadd and xor instructions. Compiler would
+try to use as less intructions between LL and SC as possible to minimize the
+chances of memory modification and improve the chances of the SC to succeed.
+
 */
 
 /*
@@ -264,6 +269,10 @@ example::atomic_addition_arm:
                         ;
                         ; strx: w9 = store(from: w8, to: [x0], state: implicitly stored state of [x0] from the last ldxr call)
   ret
+
+ARMv8.1 though is not RISC. It adds CISC style of instructions for the most
+common operations like `add`, `swap` and `max`. So if hardware supports it
+the compiler can write a more performant code for the atomic operations.
 
 */
 pub fn atomic_addition_arm(x: &AtomicI32) {
