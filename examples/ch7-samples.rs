@@ -225,8 +225,8 @@ pub fn read_modify_write_relaxed_compare_and_exchange_explicit(x: &AtomicI32) ->
 
 /*
 
-On RISC compare-and-exchange loop is implemented with
-load-linked/store-conditional LL/SC loop.
+On RISC compare-and-exchange loop is implemented with load-linked/store-conditional
+LL/SC loop. There is no atomic `lock cmpxchg` instruction.
 
 During the linked load the current core core starts to track modifications
 of a single memory addres. This memory address can be as precise as 64 bytes
@@ -243,3 +243,29 @@ modified) any time a thread switch occurs (on interrupt or context switch).
 So implementation would play it safe and cause the code to loop one more time.
 
 */
+
+/*
+
+RISC, ARMv8
+
+example::atomic_addition_arm:
+.LBB0_1:
+  ldxr w8, [x0]         ; load exclusive register
+  add w8, w8, #10
+  stxr w9, w8, [x0]     ; store exclusive register
+                        ; also `clrex` (clear exclusive) can be used
+                        ; to stop tracking writes to the memory without
+                        ; storing anything
+  cbnz w9, .LBB0_1      ; compare uses result of the `stxr` store operation
+                        ; that would indicate if the memory [x0] was modified
+                        ; after it was loaded via `ldxr` load operation
+                        ; so `ldxr` stores somewhere the [x0] value
+                        ; and `stxr` compares it with the current [x0] value
+                        ;
+                        ; strx: w9 = store(from: w8, to: [x0], state: implicitly stored state of [x0] from the last ldxr call)
+  ret
+
+*/
+pub fn atomic_addition_arm(x: &AtomicI32) {
+    x.fetch_add(10, Relaxed);
+}
