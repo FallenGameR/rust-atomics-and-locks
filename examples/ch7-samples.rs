@@ -222,3 +222,24 @@ pub fn read_modify_write_relaxed_compare_and_exchange_explicit(x: &AtomicI32) ->
         }
     }
 }
+
+/*
+
+On RISC compare-and-exchange loop is implemented with
+load-linked/store-conditional LL/SC loop.
+
+During the linked load the current core core starts to track modifications
+of a single memory addres. This memory address can be as precise as 64 bytes
+or a page of memory or the whole memory, the less precise it is the more
+cycles the loop will makes but the simpler the implementation would be.
+
+During the conditional store the core checks if that memory region got modified.
+Sometimes it would indicate that that memory region was modified but in fact
+it was not. This is acceptable and would just result in more cycles through the loop.
+
+An example of such an implementation that would give us false positives would
+be a single core system where the core assumes the worst case (memory was potentially
+modified) any time a thread switch occurs (on interrupt or context switch).
+So implementation would play it safe and cause the code to loop one more time.
+
+*/
