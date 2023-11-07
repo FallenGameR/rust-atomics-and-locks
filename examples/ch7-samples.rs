@@ -296,10 +296,52 @@ example::compare_exchange_arm:
                         ; making sure that the memory was not modified since the load
   ret
 .LBB0_2:
-  clrex
+  clrex                 ; clears the exclusive register since `stxr` was not
+                        ; called and we need to clear the state that `ldxr` stored
+  ret
+
+Note that on CSIC there is no LL/SC loop since `lock cmpxchg` is implemented and is atomic.
+
+example::compare_exchange_arm:
+  mov ecx, 6
+  mov eax, 5
+  lock cmpxchg dword ptr [rdi], ecx
   ret
 
 */
-pub fn compare_exchange_arm(x: &AtomicI32) {
+pub fn compare_exchange_week_arm(x: &AtomicI32) {
     x.compare_exchange_weak(5, 6, Relaxed, Relaxed);
+}
+
+/*
+
+Strong version of compare_exchange adds a loop that would make sure that the store
+operation was successful. Still, as before, if the memory didn't hold the expected
+value we short-circuit and exit the loop.
+
+example::compare_exchange_arm:
+  mov w8, #6
+.LBB0_1:
+  ldxr w9, [x0]
+  cmp w9, #5
+  b.ne .LBB0_4
+  stxr w9, w8, [x0]
+  cbnz w9, .LBB0_1
+  ret
+.LBB0_4:
+  clrex
+  ret
+
+Note that on CSIC the code doesn't change, there is no week version of compare and exchange,
+it can not fail since the is implemented in hardware and is atomic.
+
+example::compare_exchange_arm:
+  mov ecx, 6
+  mov eax, 5
+  lock cmpxchg dword ptr [rdi], ecx
+  ret
+
+ */
+pub fn compare_exchange_arm(x: &AtomicI32) {
+    x.compare_exchange(5, 6, Relaxed, Relaxed);
 }
