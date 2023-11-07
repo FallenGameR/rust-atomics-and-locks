@@ -278,3 +278,28 @@ the compiler can write a more performant code for the atomic operations.
 pub fn atomic_addition_arm(x: &AtomicI32) {
     x.fetch_add(10, Relaxed);
 }
+
+/*
+
+Weak compare exchange can fail and that is reflected by the branch_not_equal
+jump that clears the exclusive register and skips exchange altogether.
+
+example::compare_exchange_arm:
+  ldxr w8, [x0]         ; [x0] is the memory location of x argument
+  cmp w8, #5
+  b.ne .LBB0_2
+  mov w8, #6
+  stxr w9, w8, [x0]     ; w9 holds the success state of the store operation
+                        ; but we are not using it in this function
+                        ; `ldxr` stores somewhere the [x0] value
+                        ; and `stxr` compares it with the current [x0] value
+                        ; making sure that the memory was not modified since the load
+  ret
+.LBB0_2:
+  clrex
+  ret
+
+*/
+pub fn compare_exchange_arm(x: &AtomicI32) {
+    x.compare_exchange_weak(5, 6, Relaxed, Relaxed);
+}
