@@ -159,7 +159,11 @@ fn cache_line_miss()
     println!("{:?}", start.elapsed());
 }
 
-// 64 bytes is a reasonable guess for the size of the CPU cache line
+// 64 bytes is a reasonable guess for the size of the CPU cache
+// line align is the minimal alignment of the struct in bytes.
+// It would add 64-8=56 bytes of padding to the struct.
+//
+// Some machines may need to change the alignment to 128 bytes.
 #[repr(align(64))]
 struct Alligned(AtomicU64);
 
@@ -171,6 +175,15 @@ static AL: [Alligned; 3] = [
 
 // cargo run --release --example ch7-02-caching cache_line_hit
 // 0.2s release
+//
+// Important: this experiment shows that for performance it's
+// best to spread out unrelated atomic syncronization primitives
+// in memory (think of the mutex array).
+//
+// On the other hand if data is related and is accessed together
+// it's best to keep it closer in memory (think of sorting of
+// an almost sorted array or to a Rust mutex that stores its
+// data T close to the atomic variable that guards it).
 fn cache_line_hit(){
     println!("Cache line hit");
     black_box(&AL);
