@@ -15,6 +15,7 @@ fn main() {
         "multiple_cpu_cache_hit" => multiple_cpu_cache_hit(),
         "multiple_cpu_cache_miss" => multiple_cpu_cache_miss(),
         "cache_line_miss" => cache_line_miss(),
+        "cache_line_hit" => cache_line_hit(),
         _ => println!("Please choose a function to run"),
     }
 }
@@ -153,6 +154,39 @@ fn cache_line_miss()
     let start = Instant::now();
     for _ in 0..1_000_000_000 {
         black_box(L[1].load(Relaxed));
+    }
+
+    println!("{:?}", start.elapsed());
+}
+
+// 64 bytes is a reasonable guess for the size of the CPU cache line
+#[repr(align(64))]
+struct Alligned(AtomicU64);
+
+static AL: [Alligned; 3] = [
+    Alligned(AtomicU64::new(0)),
+    Alligned(AtomicU64::new(0)), // will not cache line with its neighbors
+    Alligned(AtomicU64::new(0)),
+];
+
+// cargo run --release --example ch7-02-caching cache_line_hit
+// 0.2s release
+fn cache_line_hit(){
+    println!("Cache line hit");
+    black_box(&AL);
+
+    // Second thread writes adjacent variables but
+    // they are spread out to different cache lines.
+    thread::spawn(|| {
+        loop {
+            black_box(AL[0].0.store(0,Relaxed));
+            black_box(AL[2].0.store(0,Relaxed));
+        }
+    });
+
+    let start = Instant::now();
+    for _ in 0..1_000_000_000 {
+        black_box(AL[1].0.load(Relaxed));
     }
 
     println!("{:?}", start.elapsed());
