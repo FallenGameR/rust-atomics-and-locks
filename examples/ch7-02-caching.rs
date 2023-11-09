@@ -71,7 +71,13 @@ fn multiple_cpu_cache_hit()
 }
 
 // cargo run --release --example ch7-02-caching multiple_cpu_cache_miss
-// 0.9s-1.9s release
+//
+// 0.9s-1.9s release - retest in on a more recent machine
+// Mara Bos'es experiments:
+// - her main machine ~3s
+// - 2022 Apple M1 0.3s -> 0.5s
+// - 2022 AMD 0.25s -> 0.65
+//
 fn multiple_cpu_cache_miss()
 {
     println!("Multiple CPU cache miss");
@@ -81,10 +87,24 @@ fn multiple_cpu_cache_miss()
     // Second thread writes the same variable.
     //
     // With MESI cache coherency protocol,
-    // the data should be set to be M = Modified state
+    // the data should be set to be E = Exclusive state
     // here and I = Invalid state in the other thread
-    // and then write through and cache invalidation
-    // should happen.
+    // and then write through and cache
+    // invalidation should happen.
+    //
+    // The same performance drop would happen even
+    // if we would change the store operation
+    // with the compare-and-exchange that fails
+    // on a X64 CPU. Theoretically it should not
+    // trigger the store path, but practically
+    // we see the same performance drop even
+    // though this operation is implemented in hardware.
+    //
+    // Thus for performance boost we should have
+    // used load operation in the SpinLock implementation
+    // followed by the compare-and-exchange. Even though
+    // just a single compare-and-exchange would be enough.
+    //
     thread::spawn(|| {
         loop {
             black_box(A.store(0,Relaxed));
