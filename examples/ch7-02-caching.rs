@@ -14,6 +14,7 @@ fn main() {
         "single_cpu_cache_hit" => single_cpu_cache_hit(),
         "multiple_cpu_cache_hit" => multiple_cpu_cache_hit(),
         "multiple_cpu_cache_miss" => multiple_cpu_cache_miss(),
+        "cache_line_miss" => cache_line_miss(),
         _ => println!("Please choose a function to run"),
     }
 }
@@ -74,7 +75,7 @@ fn multiple_cpu_cache_hit()
 //
 // 0.9s-1.9s release - retest in on a more recent machine
 // Mara Bos'es experiments:
-// - her main machine ~3s
+// - her main machine 0.3 -> 3s
 // - 2022 Apple M1 0.3s -> 0.5s
 // - 2022 AMD 0.25s -> 0.65
 //
@@ -114,6 +115,42 @@ fn multiple_cpu_cache_miss()
     let start = Instant::now();
     for _ in 0..1_000_000_000 {
         black_box(A.load(Relaxed));
+    }
+
+    println!("{:?}", start.elapsed());
+}
+
+static L: [AtomicU64; 3] = [
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+];
+
+// cargo run --release --example ch7-02-caching cache_line_miss
+// 0.9s-1.9s release - retest in on a more recent machine
+fn cache_line_miss()
+{
+    println!("Cache line miss");
+    black_box(&L);
+
+    // Second thread writes adjacent variables.
+    // But since the cache line is 64 bytes around
+    // the requested memory address, we invalidate
+    // the whole cache line here without touching
+    // the variable that the main thread reads.
+    //
+    // Mara doesn't use black_box here for some reason.
+    // After I added black_box the perf is the same.
+    thread::spawn(|| {
+        loop {
+            black_box(L[0].store(0,Relaxed));
+            black_box(L[2].store(0,Relaxed));
+        }
+    });
+
+    let start = Instant::now();
+    for _ in 0..1_000_000_000 {
+        black_box(L[1].load(Relaxed));
     }
 
     println!("{:?}", start.elapsed());
