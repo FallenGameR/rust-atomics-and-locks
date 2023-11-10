@@ -9,7 +9,27 @@ use std::sync::atomic::Ordering::{Relaxed, Acquire, Release, AcqRel, SeqCst};
 
 /*
 
-ARM64 is said to be weekly ordered
+ARM64 is said to be weekly ordered. Potentially any memory operation can be reordered.
+
+Relaxed is very different from other orderings. It's code uses different instructions
+that become theirstrickly ordered analogs with other types of memory ordering:
+
+- str  (store register)           -> strL  (store-reLease register)
+- stxr (store exclusive register) -> stLxr (store-reLease exclusive register)
+- ldr  (load register)            -> ldAr  (load-Acquire register)
+- ldxr (load exclusive register)  -> ldAxr (load-Acquire exclusive register)
+
+ldAr and ldAxr will never be reordered with with any later memory operations.
+strL and stLxr will never be reordered with any earlier memory operations.
+
+AcqRel is different from an Acquire and a Release pair:
+
+- AcqRel would use  ldAxr and stLxr
+- Acquire would use ldAxr and stxr
+- Release would use ldxr  and stLxr
+
+SeqCst is the same as AcqRel. And Relaxed is cheaper than on AMD64 but doesn't
+provide any ordering guarantees.
 
 */
 fn main() {
