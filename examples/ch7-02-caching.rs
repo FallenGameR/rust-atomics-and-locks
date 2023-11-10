@@ -6,7 +6,17 @@ use std::time::Instant;
 
 static A: AtomicU64 = AtomicU64::new(0);
 
-// cargo run --release --example ch7-02-caching FUNCTION
+/*
+Function                    Mara        2022 Apple M1       2022 AMD            Office           Home
+single_cpu_cache_hit        0.3         0.3                 0.25                0.2              0.19
+multiple_cpu_cache_hit      0.3         0.3                 0.25                0.2              0.19
+multiple_cpu_cache_miss     0.3         0.5                 0.65                0.9-1.9          0.5
+cache_line_miss                                                                 0.9-1.9          0.5
+cache_line_hit                                                                  0.2              0.19
+
+cargo run --release --example ch7-02-caching FUNCTION_NAME
+*/
+
 fn main() {
     let choise: Vec<String> = std::env::args().collect();
 
@@ -20,10 +30,7 @@ fn main() {
     }
 }
 
-// cargo run --release --example ch7-02-caching single_cpu_cache_hit
-// 0.2s release (book says it was 0.3 on Mara Bos'es machine)
-fn single_cpu_cache_hit()
-{
+fn single_cpu_cache_hit() {
     println!("Single CPU cache hit");
 
     // Don't assume A is only referenced in this thread,
@@ -42,10 +49,7 @@ fn single_cpu_cache_hit()
     println!("{:?}", start.elapsed());
 }
 
-// cargo run --release --example ch7-02-caching multiple_cpu_cache_hit
-// 0.2s release
-fn multiple_cpu_cache_hit()
-{
+fn multiple_cpu_cache_hit() {
     println!("Multiple CPU cache hit");
 
     black_box(&A);
@@ -58,10 +62,8 @@ fn multiple_cpu_cache_hit()
     // We are specifically not measuring the timings
     // of the operations in the background thread,
     // we are measuring the timings on the main thread
-    thread::spawn(|| {
-        loop {
-            black_box(A.load(Relaxed));
-        }
+    thread::spawn(|| loop {
+        black_box(A.load(Relaxed));
     });
 
     let start = Instant::now();
@@ -72,16 +74,7 @@ fn multiple_cpu_cache_hit()
     println!("{:?}", start.elapsed());
 }
 
-// cargo run --release --example ch7-02-caching multiple_cpu_cache_miss
-//
-// 0.9s-1.9s release - retest in on a more recent machine
-// Mara Bos'es experiments:
-// - her main machine 0.3 -> 3s
-// - 2022 Apple M1 0.3s -> 0.5s
-// - 2022 AMD 0.25s -> 0.65
-//
-fn multiple_cpu_cache_miss()
-{
+fn multiple_cpu_cache_miss() {
     println!("Multiple CPU cache miss");
 
     black_box(&A);
@@ -107,10 +100,8 @@ fn multiple_cpu_cache_miss()
     // followed by the compare-and-exchange. Even though
     // just a single compare-and-exchange would be enough.
     //
-    thread::spawn(|| {
-        loop {
-            black_box(A.store(0,Relaxed));
-        }
+    thread::spawn(|| loop {
+        black_box(A.store(0, Relaxed));
     });
 
     let start = Instant::now();
@@ -127,10 +118,7 @@ static L: [AtomicU64; 3] = [
     AtomicU64::new(0),
 ];
 
-// cargo run --release --example ch7-02-caching cache_line_miss
-// 0.9s-1.9s release - retest in on a more recent machine
-fn cache_line_miss()
-{
+fn cache_line_miss() {
     println!("Cache line miss");
     black_box(&L);
 
@@ -144,11 +132,9 @@ fn cache_line_miss()
     //
     // Mara doesn't use black_box here for some reason.
     // After I added black_box the perf is the same.
-    thread::spawn(|| {
-        loop {
-            black_box(L[0].store(0,Relaxed));
-            black_box(L[2].store(0,Relaxed));
-        }
+    thread::spawn(|| loop {
+        black_box(L[0].store(0, Relaxed));
+        black_box(L[2].store(0, Relaxed));
     });
 
     let start = Instant::now();
@@ -173,9 +159,6 @@ static AL: [Alligned; 3] = [
     Alligned(AtomicU64::new(0)),
 ];
 
-// cargo run --release --example ch7-02-caching cache_line_hit
-// 0.2s release
-//
 // Important: this experiment shows that for performance it's
 // best to spread out unrelated atomic syncronization primitives
 // in memory (think of the mutex array).
@@ -184,17 +167,15 @@ static AL: [Alligned; 3] = [
 // it's best to keep it closer in memory (think of sorting of
 // an almost sorted array or to a Rust mutex that stores its
 // data T close to the atomic variable that guards it).
-fn cache_line_hit(){
+fn cache_line_hit() {
     println!("Cache line hit");
     black_box(&AL);
 
     // Second thread writes adjacent variables but
     // they are spread out to different cache lines.
-    thread::spawn(|| {
-        loop {
-            black_box(AL[0].0.store(0,Relaxed));
-            black_box(AL[2].0.store(0,Relaxed));
-        }
+    thread::spawn(|| loop {
+        black_box(AL[0].0.store(0, Relaxed));
+        black_box(AL[2].0.store(0, Relaxed));
     });
 
     let start = Instant::now();
