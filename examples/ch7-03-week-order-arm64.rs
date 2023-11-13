@@ -31,6 +31,10 @@ AcqRel is different from an Acquire and a Release pair:
 SeqCst is the same as AcqRel. And Relaxed is cheaper than on AMD64 but doesn't
 provide any ordering guarantees.
 
+Because of difference how strongly oredered and weekly ordered Relaxed vs AcqRel
+works it is possible for a program to work correctly on AMD64 but not on ARM64.
+This happens when Relaxed memory ordering is used when AcqRel needs to be used.
+
 */
 fn main() {
 }
