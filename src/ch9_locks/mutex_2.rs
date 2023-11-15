@@ -41,6 +41,18 @@ impl<T> Mutex<T> {
         }
     }
 
+    /*
+
+    The goal of this optimization is to skip the costly syscall
+    in the case there is no thread that is waiting for our lock.
+
+    To do that we have to track if there is a waiting thread
+    with the state we maintain in the user mode ourselves.
+    Only if the state of the lock is 2 we have to wait.
+    Similarly only if the state is 2 we have to wake a thread.
+
+     */
+
     pub fn lock(&self) -> MutexGuard<T> {
         if self.state.compare_exchange(0, 1, Acquire, Relaxed).is_err() {
             while self.state.swap(2, Acquire) != 0 {
