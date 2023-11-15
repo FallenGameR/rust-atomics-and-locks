@@ -51,6 +51,16 @@ impl<T> Mutex<T> {
     }
 }
 
+/*
+
+Note that if we would remove both wake and wait our mutex would
+still work correctly since we maintain the state of our lock
+in the user mode. It would be essentially a spin lock.
+
+What wait and wake add on top of that is a very serious optimization
+to avoid busy looping. They don't add any correctnesses.
+
+*/
 impl<T> Drop for MutexGuard<'_, T> {
     fn drop(&mut self) {
         // Set the state back to 0: unlocked.

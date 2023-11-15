@@ -37,7 +37,7 @@ impl<T> Deref for Guard<'_, T> {
     fn deref(&self) -> &T {
         // Safety: The very existence of this Guard
         // guarantees we've exclusively locked the lock.
-        unsafe { &*self.lock.value.get() }
+        unsafe { & *self.lock.value.get() }
     }
 }
 
