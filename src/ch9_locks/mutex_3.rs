@@ -41,6 +41,11 @@ impl<T> Mutex<T> {
         }
     }
 
+    // One can add #[inline] suggestion to the compiler for such a small method
+    // it can result in a slighly larger but faster codebase. For small methods
+    // usually the fast benefit is there and the code size is almost the same.
+    //
+    // However it is not clear why the compiler can't figure it out by itself.
     pub fn lock(&self) -> MutexGuard<T> {
         if self.state.compare_exchange(0, 1, Acquire, Relaxed).is_err() {
             // The lock was already locked. :(
@@ -50,14 +55,42 @@ impl<T> Mutex<T> {
     }
 }
 
+// One can add the #[cold] hint for compiller. It would suggest that this is
+// not a common code path and we expect that most of the time lock can be
+// done with the `if compare_exchange(0, 1)`.
+//
+// #[cold]
 fn lock_contended(state: &AtomicU32) {
     let mut spin_count = 0;
 
+    // Load is used first since compare and exchange is costlier.
+    // xcng would invalidate whole cache line. Load would not do that.
+    // So with series of loads we can actively wait for the moment
+    // when the state would change without invalidating the cache line
+    // that can be in use by the other CPUs.
+    //
+    // We spin only if there are no other waiters (we are the first one
+    // to promote the lock to the contended state). As a heuristic we
+    // assume that the first thread that make use of the data would
+    // soon release the lock and it would set the state to 0.
+    //
+    // If that assumption would turn true (and most practical use cases are)
+    // then the next if with the compare_and_exchange would lock the state
+    // to 1 (locked but no other waiters) without making a syscall.
+    //
+    // If the state is already 2 then another thread already tried
+    // spinning and it didn't help. So we go straight to the syscall.
+    //
+    // 100 cycles is a random number. There is no single best value here,
+    // it all depends on the platform and the OS. 100 is a reasonably
+    // good practical value that was used in Rust 1.6 on Linux.
     while state.load(Relaxed) == 1 && spin_count < 100 {
         spin_count += 1;
         std::hint::spin_loop();
     }
 
+    // Try to acquire the lock without making a system call.
+    // That is possible only if there is no thread waiting for the lock.
     if state.compare_exchange(0, 1, Acquire, Relaxed).is_ok() {
         return;
     }
