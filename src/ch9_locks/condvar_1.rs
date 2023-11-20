@@ -31,6 +31,23 @@ impl Condvar {
     //
     // The method returns a mutex that is locked.
     pub fn wait<'a, T>(&self, guard: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
+        // The memory ordering explanation is not clear to me. From what I understand
+        // it it based on the fact that mutex lock and unlock/drop are already ordered
+        // operations (mutex uses acquire/release under the hood that causes all the
+        // pending operations on the CPU to finish before procceeding with either lock
+        // or unlock/drop).
+        //
+        // Thus the notify_events load could be Relaxed. Everything that was pending
+        // on the CPU would be finished when we are using the mutex.
+        //
+        // But having said that, we could test this logic with an experiment only on
+        // some ARM CPU line M1 from Apple. Since x64 uses strict ordering and it
+        // would not be possible to validate the said logic with a practical test
+        // (since Relaxed is equivalent to Acquire/Release on x64).
+        //
+        // Thus if one is working on such a code them would need to have access to
+        // the ARM CPU to make sure their assumptions are correct. So if I am to
+        // write such a code I'll need to use a Mac for testing.
         let counter_value = self.notify_events.load(Relaxed);
 
         // Unlock the mutex by dropping the guard, but remember the
