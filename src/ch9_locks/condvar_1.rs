@@ -62,7 +62,8 @@ impl Condvar {
         //
         // Thus if one is working on such a code them would need to have access to
         // the ARM CPU to make sure their assumptions are correct. So if I am to
-        // write such a code I'll need to use a Mac for testing.
+        // write such a code I'll need to use a Mac for testing. And the tests
+        // need to be long sress tests.
         let counter_value = self.notify_events.load(Relaxed);
 
         // Unlock the mutex by dropping the guard, but remember the
@@ -159,5 +160,9 @@ fn test_condvar() {
 
     // Check that the main thread actually did wait (not busy-loop),
     // while still allowing for a few spurious wake ups.
+    //
+    // If this number is high that means that the main thread spin-loops,
+    // and we specifically want to test that we are actually making
+    // a thread sleep system call in this test.
     assert!(wakeups < 10);
 }
