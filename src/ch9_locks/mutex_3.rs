@@ -48,7 +48,8 @@ impl<T> Mutex<T> {
     // However it is not clear why the compiler can't figure it out by itself.
     pub fn lock(&self) -> MutexGuard<T> {
         if self.state.compare_exchange(0, 1, Acquire, Relaxed).is_err() {
-            // The lock was already locked. :(
+            // Since the lock was already locked we need to wait
+            // But probably it would be unlocked soon, so we'll be smart about it
             lock_contended(&self.state);
         }
         MutexGuard { mutex: self }
@@ -109,13 +110,23 @@ impl<T> Drop for MutexGuard<'_, T> {
 }
 
 // TODO (bench)
+// 0.044s on release
 #[test]
 fn main() {
     use std::time::Instant;
     let m = Mutex::new(0);
+
+    // Don't let the compiler assume things
+    // and optimize away the mutex usage.
+    // The compiler would behave similarly as if
+    // there are other threads that will use the mutex.
     std::hint::black_box(&m);
+
     let start = Instant::now();
     for _ in 0..5_000_000 {
+        // Lock should be very fast to lock and unlock
+        // There are no other threads, so the state
+        // would just shift between 0 and 1
         *m.lock() += 1;
     }
     let duration = start.elapsed();
@@ -123,6 +134,7 @@ fn main() {
 }
 
 // TODO (bench)
+// 1.5s on release
 #[test]
 fn main2() {
     use std::thread;
@@ -132,6 +144,8 @@ fn main2() {
     let start = Instant::now();
     thread::scope(|s| {
         for _ in 0..4 {
+            // Note that this is an extreme and unrealistic scenario
+            // But it is good to test anyway
             s.spawn(|| {
                 for _ in 0..5_000_000 {
                     *m.lock() += 1;
@@ -141,4 +155,7 @@ fn main2() {
     });
     let duration = start.elapsed();
     println!("locked {} times in {:?}", *m.lock(), duration);
+
+    let value = *m.lock();
+    assert!(value == 5_000_000 * 4, "value = {}", value);
 }
