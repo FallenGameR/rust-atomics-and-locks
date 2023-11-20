@@ -28,6 +28,13 @@ fn main() {
                         guard = not_empty.wait(guard).expect("Mutex is not poisoned");
                     }
                 };
+
+                // Explicitcly dropping the guard to unlock the mutex.
+                // That is normal for the condition variable usage.
+                //
+                // Otherwise the guard would protect the vector till the end of this block
+                // preventing other threads to work with the vector. While this thread
+                // would only need to process a single item from it that it already took.
                 drop(guard);
 
                 // The way how to process a value outside of guard would be different (in the macro).
@@ -44,9 +51,9 @@ fn main() {
     });
 }
 
-// Here the Producer thread doesn't need to know how many consumers are there (only if it is one or many)
-// and it doesn't need to know the exact condition the consumers are waiting on (it could be compound on
-// several conditions). But the code needs to handle the guard drop now and is more complex to understand.
+// Here the Producer thread doesn't need to know how many consumers are there (it could be one or many)
+// and it doesn't need to know the exact condition the consumers are waiting on (it could be a compound on
+// several conditions).
 //
 // On the other hand the thread parking while easier to understand leaves posibility of some code paths
 // that are not intuitive and can lead to bugs. So it is a false sense of understanding.
