@@ -15,6 +15,18 @@ pub struct Mutex<T> {
 unsafe impl<T> Sync for Mutex<T> where T: Send {}
 
 pub struct MutexGuard<'a, T> {
+    // pub(crate) visibility is needed for the future
+    // condvar implementation that is defined in the
+    // same create but in another file.
+    //
+    // If we didn't need to access the mutex from codvar
+    // (that needs to unlock and then lock the mutex for
+    // it's normal operation) then normally we would
+    // treat this field as private. Nobody outside of the
+    // create that is responsible for the thread syncronization
+    // primitives should be able to access this mutex. Since
+    // that would violate the corectness guarantees that
+    // the thread syncronization library (create) provides.
     pub(crate) mutex: &'a Mutex<T>,
 }
 
