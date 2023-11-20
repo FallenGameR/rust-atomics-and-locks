@@ -7,6 +7,21 @@ pub struct Condvar {
     // We don't really count anything, we just need something that
     // would be changed on every notification (every time a signal
     // is sent - it could be either in wake_one or wake_all)
+    //
+    // A theoretical problem here is a possibility of on overflow.
+    // In the case we would have spurious wakeups that would happen
+    // exactly N * 2^32 times we would miss a wakeup notification.
+    // But that is a very huge number for the spurious wakeups to happen.
+    // If they do happen, something is broken on the CPU side anyway.
+    // So this risk is perfectly acceptable since it is negligible.
+    //
+    // But that risk exists and if it happens the sleeping thread
+    // would not ever be woken up. To mitigate that some platforms
+    // (Linux but not Windows or MacOS at the moment) have a futex
+    // version with a timeout. In the case there is such an overflow
+    // the thread would be woken up by the timeout. Likelly in the
+    // future other platforms would use this mechanism as well and
+    // for the caller it would be just another spurious wakeup.
     notify_events: AtomicU32,
 }
 
