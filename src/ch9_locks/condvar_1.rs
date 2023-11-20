@@ -38,6 +38,11 @@ impl Condvar {
         //
         // When we drop the guard here, the mutex is unlocked and
         // some other thread can lock it and work with the protected data.
+        //
+        // To make this statement work we defined mutex as `pub(crate)`.
+        // This field is not accessible normally. But since we need to use
+        // it in the conditional variable that requires access to it we
+        // defining both of them in the same create and set crate level visibility.
         let mutex = guard.mutex;
         drop(guard);
 
