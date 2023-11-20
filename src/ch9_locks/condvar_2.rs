@@ -6,6 +6,10 @@ use super::mutex_3::MutexGuard;
 
 pub struct Condvar {
     counter: AtomicU32,
+    // This new implementation optimizes the syscall usage.
+    //
+    // We can make wake call conditional and skip them in
+    // the case there are no other threads that can be awoken.
     num_waiters: AtomicUsize,
 }
 
@@ -18,6 +22,35 @@ impl Condvar {
     }
 
     pub fn notify_one(&self) {
+        // My explanation why the Relaxed ordering is enough here is:
+        // since all the cores would observe the modifications in the
+        // same order and we structure the code in a way that the num_waiters
+        // is incremented as the first thing that we do and decremented
+        // as the last thing that we do. There is no way for the
+        // read operation to read a value outside of that order.
+        // But that explanation is wrong.
+        //
+        // Think of out-of-order operations as cached operations that
+        // still didn't finish. So let's say condvar's wait started
+        // for the first time and it set num_waiters from 0 to 1.
+        // This operation takes some time and it is not finished yet.
+        // So other cores could read the value as 0. But since the
+        // wait operation started that means that there is at least
+        // one more thread that needs to be woken up.
+        //
+        // The book explanation is that we have a risk of missing
+        // a notification only when load reads 0 while there exists
+        // a thread to wake up. In this case the load observes the
+        // value either before the increment or after the decrement.
+        //
+        // Again, Mara says that the mutax's lock and unlock/drop
+        // are guranteeing the ordering here. Their implementation
+        // contains acquire/release that makes sure that all the
+        // pending operations on the CPU are finished before we
+        // get Instruction Pointer that executes our code.
+        // If mutex's code returned then all the pending CPU
+        // operations were finished and there could not be
+        // a caching problem here.
         if self.num_waiters.load(Relaxed) > 0 {
             self.counter.fetch_add(1, Relaxed);
             wake_one(&self.counter);
@@ -33,16 +66,25 @@ impl Condvar {
 
     pub fn wait<'a, T>(&self, guard: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
         self.num_waiters.fetch_add(1, Relaxed);
-
         let counter_value = self.counter.load(Relaxed);
-
         let mutex = guard.mutex;
+
+        // Mutex unlock/drop here ensures that num_waiters fetch_add completed.
+        // Meaning that wait here would only start if num_waiters is at least 1
+        // and that is the signal that there is at least one waiting thread
+        // for the wake operation to wake up if needed.
         drop(guard);
 
+        // There is nothing to optimize here (no additional ifs).
+        // The futex wait call would first check if the value did change
+        // since the last load and would only wait if it stayed the same.
         wait(&self.counter, counter_value);
 
         self.num_waiters.fetch_sub(1, Relaxed);
 
+        // Mutex lock here ensures that num_waiters fetch_sub completed.
+        // Meaning that wait here was completed and thus there is no
+        // waiting thread that can be woken up in the case num_waiters is 0.
         mutex.lock()
     }
 }
