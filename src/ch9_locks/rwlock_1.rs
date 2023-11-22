@@ -10,6 +10,11 @@ pub struct RwLock<T> {
     value: UnsafeCell<T>,
 }
 
+// T needs to be Sync since mutiple readers would need
+// to be able to access the data at the same time.
+//
+// RwLock does not implement Send so that it would not
+// be used to Send an Rc to another thread.
 unsafe impl<T> Sync for RwLock<T> where T: Send + Sync {}
 
 impl<T> RwLock<T> {
@@ -50,14 +55,12 @@ impl<T> RwLock<T> {
     }
 }
 
-pub struct ReadGuard<'a, T> {
-    rwlock: &'a RwLock<T>,
-}
 
 pub struct WriteGuard<'a, T> {
     rwlock: &'a RwLock<T>,
 }
 
+// This gives the Read semantic to RwLock that a writer acquired
 impl<T> Deref for WriteGuard<'_, T> {
     type Target = T;
     fn deref(&self) -> &T {
@@ -65,28 +68,14 @@ impl<T> Deref for WriteGuard<'_, T> {
     }
 }
 
+// This gives the Write semantic to RwLock that a writer acquired
 impl<T> DerefMut for WriteGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe { &mut *self.rwlock.value.get() }
     }
 }
 
-impl<T> Deref for ReadGuard<'_, T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        unsafe { &*self.rwlock.value.get() }
-    }
-}
-
-impl<T> Drop for ReadGuard<'_, T> {
-    fn drop(&mut self) {
-        if self.rwlock.state.fetch_sub(1, Release) == 1 {
-            // Wake up a waiting writer, if any.
-            wake_one(&self.rwlock.state);
-        }
-    }
-}
-
+// Unlocking done by a writer unlocks everybody
 impl<T> Drop for WriteGuard<'_, T> {
     fn drop(&mut self) {
         self.rwlock.state.store(0, Release);
@@ -94,3 +83,28 @@ impl<T> Drop for WriteGuard<'_, T> {
         wake_all(&self.rwlock.state);
     }
 }
+
+pub struct ReadGuard<'a, T> {
+    rwlock: &'a RwLock<T>,
+}
+
+// This gives the Read semantic to RwLock that a reader acquired
+impl<T> Deref for ReadGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        unsafe { &*self.rwlock.value.get() }
+    }
+}
+
+// Unlocking done by a reader can onlock only a writer
+// all the readers are not blocked by each other
+impl<T> Drop for ReadGuard<'_, T> {
+    fn drop(&mut self) {
+        if self.rwlock.state.fetch_sub(1, Release) == 1 {
+            // Somebody did wait, it could be reader or writer.
+            // But if it was writer it can write now.
+            wake_one(&self.rwlock.state);
+        }
+    }
+}
+
