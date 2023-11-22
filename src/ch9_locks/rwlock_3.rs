@@ -6,7 +6,8 @@ use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 pub struct RwLock<T> {
     /// The number of read locks times two, plus one if there's
-    /// a writer waiting, u32::MAX if write locked.
+    /// a writer waiting, u32::MAX if write locked. Note that
+    /// MAX is an odd number, so our logic holds true.
     ///
     /// This means that readers may acquire the lock only
     /// when the state is even, but need to block when odd.
@@ -153,6 +154,16 @@ impl<T> Drop for ReadGuard<'_, T> {
     }
 }
 
+// When we write-lock there is no information on how many writers
+// can also be waiting. We just store MAX in this case. Thus
+// we can't uptimize the unlock code. It stayed the same as in
+// the previous example.
+//
+// That is ok for the scenario when there are many readers and
+// only a few (or one) writers. But if there are many writers
+// it's possible to uptimize via storing information how
+// many writers are waiting. We don't need to wake them all.
+// And we don't need to wake all the readers in this case either.
 impl<T> Drop for WriteGuard<'_, T> {
     fn drop(&mut self) {
         self.rwlock.state.store(0, Release);
