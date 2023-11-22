@@ -46,11 +46,24 @@ impl<T> RwLock<T> {
         while self.state.compare_exchange(
             0, u32::MAX, Acquire, Relaxed
         ).is_err() {
-            let w = self.writer_wake_counter.load(Acquire);
+            let writer_is_done_notification = self.writer_wake_counter.load(Acquire);
+            // When another writer holds the lock the state will be MAX.
+            // When this happens this current writer on this current thread
+            // will need to wait until the state changes and thus the wait call.
             if self.state.load(Relaxed) != 0 {
                 // Wait if the RwLock is still locked, but only if
                 // there have been no wake signals since we checked.
-                wait(&self.writer_wake_counter, w);
+                //
+                // All this implementation improvement is to make this wait
+                // call more smart. If there are many readers the writer in
+                // the old implementation would wake up only to find out that
+                // there is another reader and go back to sleep again. This
+                // implemenatation would wake up the writer only if it is
+                // possible for the writter to be truly unblocked.
+                //
+                // But this implementation doesn't prioritize the writers.
+                // They could starve in the case there are many readers.
+                wait(&self.writer_wake_counter, writer_is_done_notification);
             }
         }
         WriteGuard { rwlock: self }
@@ -89,6 +102,9 @@ impl<T> Drop for ReadGuard<'_, T> {
     fn drop(&mut self) {
         if self.rwlock.state.fetch_sub(1, Release) == 1 {
             self.rwlock.writer_wake_counter.fetch_add(1, Release); // New!
+            // If the last reader is done with the lock there are no other
+            // readers. But there would be a writer waiting, thus we
+            // are singnaling only to that one possible writer.
             wake_one(&self.rwlock.writer_wake_counter); // Changed!
         }
     }
