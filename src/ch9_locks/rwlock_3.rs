@@ -10,6 +10,12 @@ pub struct RwLock<T> {
     ///
     /// This means that readers may acquire the lock only
     /// when the state is even, but need to block when odd.
+    ///
+    /// We don't track the number of writers here.
+    /// It happens naturally in the writer wait method.
+    /// They all would just block on the same state value
+    /// and unblock only other writers until there is
+    /// no other writer left.
     state: AtomicU32,
     /// Incremented to wake up writers.
     writer_wake_counter: AtomicU32,
@@ -47,32 +53,60 @@ impl<T> RwLock<T> {
     }
 
     pub fn write(&self) -> WriteGuard<T> {
-        let mut s = self.state.load(Relaxed);
+        let mut state = self.state.load(Relaxed);
         loop {
-            // Try to lock if unlocked.
-            if s <= 1 {
+            // If we see it as unlocked, try to get the exclusive access to the data
+            // by locking it.
+            //
+            // 0 means no readers and no writers are waiting.
+            // 1 means that there were readers reading the data then a writer
+            // arrived and started waiting for the lock. Every reader decremented
+            // the state by 2 until there were no more readers left. And the last
+            // reader would signal on the writer_wake_counter to wake up the writer
+            // that have waited before.
+            //
+            // The code that observes 1 in the state could be either that writer
+            // who was just woken up and got to check the state again after the
+            // wait returned. Or it could be a new writer that would also observe
+            // 1 and would compete with the old writer in the compare_exchange.
+            //
+            // Looks like the writers would race. If that's a problem, there should
+            // be a queue implemented for the writers. Writers would be waked up
+            // in the order they arrived.
+            if state <= 1 {
                 match self.state.compare_exchange(
-                    s, u32::MAX, Acquire, Relaxed
+                    state, u32::MAX, Acquire, Relaxed
                 ) {
                     Ok(_) => return WriteGuard { rwlock: self },
-                    Err(e) => { s = e; continue; }
+                    Err(e) => { state = e; continue; }
                 }
             }
+
             // Block new readers, by making sure the state is odd.
-            if s % 2 == 0 {
+            // Relaxed is enough here since we don't lock the data?
+            if state % 2 == 0 {
                 match self.state.compare_exchange(
-                    s, s + 1, Relaxed, Relaxed
+                    state, state + 1, Relaxed, Relaxed
                 ) {
+                    // We marked with the odd state that there is a writer waiting.
+                    // If state was changed from 0 to 1 then the code below would
+                    // not trigger the wait and the next loop would aquire the lock
+                    // for the single writer that we have.
                     Ok(_) => {}
-                    Err(e) => { s = e; continue; }
+                    // State was updated by someone, try again in a new loop iteration
+                    Err(e) => { state = e; continue; }
                 }
             }
-            // Wait, if it's still locked
-            let w = self.writer_wake_counter.load(Acquire);
-            s = self.state.load(Relaxed);
-            if s >= 2 {
-                wait(&self.writer_wake_counter, w);
-                s = self.state.load(Relaxed);
+
+            // This is essentially what the previous code did
+            let writer_is_done_notification = self.writer_wake_counter.load(Acquire);
+            state = self.state.load(Relaxed);
+
+            // There is either a reader or a writer doing something the the locked data
+            // right now. Wait until the state would change to somethind we can unlock.
+            if state >= 2 {
+                wait(&self.writer_wake_counter, writer_is_done_notification);
+                state = self.state.load(Relaxed);
             }
         }
     }
