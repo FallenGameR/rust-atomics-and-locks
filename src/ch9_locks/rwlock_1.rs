@@ -115,3 +115,6 @@ impl<T> Drop for ReadGuard<'_, T> {
     }
 }
 
+// Release - flush all the pending operations
+// Acquire - wait for all the pending operations to complete
+// They work only when they are used cooperatively
