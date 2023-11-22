@@ -53,6 +53,17 @@ impl Condvar {
         // a caching problem here.
         if self.num_waiters.load(Relaxed) > 0 {
             self.counter.fetch_add(1, Relaxed);
+            // There is an optimization oportunity here. It's complex in description
+            // but it seems that it boils down to the following - mutex wakes a thread
+            // and condition variable wakes a thread, plus there are the thread that is
+            // doing an operation. Thus we are waking up more threads than needed and
+            // it can quite common that a thread wakes up only to start waiting again.
+            // This is called spurrious wake up problem.
+            //
+            // An optimization in libc was added in 2017 that tracks more state,
+            // where waiters are organized into two groups only only one of them
+            // is allowed to consume notifications. But this solution requires more
+            // data to be traked (resources) and is complex to implement.
             wake_one(&self.counter);
         }
     }
@@ -60,6 +71,16 @@ impl Condvar {
     pub fn notify_all(&self) {
         if self.num_waiters.load(Relaxed) > 0 {
             self.counter.fetch_add(1, Relaxed);
+            // Another optimization opportunity here is to handle the so called the
+            // thundering herd problem. Wake all wakes many threads here and it's quite
+            // common that only one of them will be able to work. They all would start
+            // competing for the same mutex and only one will win. Meaning that all other
+            // threads could have been woken up later anyway.
+            //
+            // Thread wake up and putting it back to sleep is a costly operation
+            // that requruires a context switch and a syscall.
+            //
+            // This can be handled in OSes that can do requeue operation.
             wake_all(&self.counter);
         }
     }
