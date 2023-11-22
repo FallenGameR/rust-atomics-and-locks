@@ -38,6 +38,7 @@ impl<T> RwLock<T> {
                 }
             }
             if s == u32::MAX {
+                // Wait until the state changes from MAX that means writer-locked.
                 wait(&self.state, u32::MAX);
                 s = self.state.load(Relaxed);
             }
@@ -45,11 +46,12 @@ impl<T> RwLock<T> {
     }
 
     pub fn write(&self) -> WriteGuard<T> {
-        while let Err(s) = self.state.compare_exchange(
+        while let Err(state_value) = self.state.compare_exchange(
             0, u32::MAX, Acquire, Relaxed
         ) {
             // Wait while already locked.
-            wait(&self.state, s);
+            // Wait untill the state_value changes.
+            wait(&self.state, state_value);
         }
         WriteGuard { rwlock: self }
     }
@@ -80,6 +82,9 @@ impl<T> Drop for WriteGuard<'_, T> {
     fn drop(&mut self) {
         self.rwlock.state.store(0, Release);
         // Wake up all waiting readers and writers.
+        //
+        // If we have competing readers and writers
+        // there would be a race with a random winner.
         wake_all(&self.rwlock.state);
     }
 }
@@ -101,8 +106,10 @@ impl<T> Deref for ReadGuard<'_, T> {
 impl<T> Drop for ReadGuard<'_, T> {
     fn drop(&mut self) {
         if self.rwlock.state.fetch_sub(1, Release) == 1 {
-            // Somebody did wait, it could be reader or writer.
-            // But if it was writer it can write now.
+            // We don't have any waiting readers now.
+            // But we can have a waiting writer that awaits
+            // till the state is zero. We need to wake up that
+            // writer for it to recheck the state and wake up.
             wake_one(&self.rwlock.state);
         }
     }
